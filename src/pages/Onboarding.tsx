@@ -70,8 +70,14 @@ export default function Onboarding() {
     });
 
     if (error) {
+      console.error('updateUser error:', {
+        message: error.message,
+        name: (error as any).name,
+        status: (error as any).status,
+        code: (error as any).code,
+      });
       toast.error('שגיאה בשליחת קוד האימות', {
-        description: error.message,
+        description: `${error.message}${(error as any).code ? ` (${(error as any).code})` : ''}`,
       });
       setLoading(false);
       return;
@@ -97,8 +103,14 @@ export default function Onboarding() {
     });
 
     if (error) {
+      console.error('verifyOtp error:', {
+        message: error.message,
+        name: (error as any).name,
+        status: (error as any).status,
+        code: (error as any).code,
+      });
       toast.error('קוד אימות שגוי', {
-        description: 'נא לנסות שוב',
+        description: `${error.message}${(error as any).code ? ` (${(error as any).code})` : ''}`,
       });
       setLoading(false);
       return;
@@ -110,8 +122,14 @@ export default function Onboarding() {
       .eq('id', user.id);
 
     if (updateError) {
+      console.error('profiles update error:', {
+        message: updateError.message,
+        code: updateError.code,
+        details: updateError.details,
+        hint: updateError.hint,
+      });
       toast.error('שגיאה בעדכון מספר הטלפון', {
-        description: updateError.message,
+        description: `${updateError.message}${updateError.code ? ` (${updateError.code})` : ''}`,
       });
       setLoading(false);
       return;
