@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { LogOut, User, Settings, FileText, Home, Calendar } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import { QrScanner } from '@/components/QrScanner';
 
 export default function Dashboard() {
   const { user, profile, isAdmin, signOut } = useAuth();
@@ -61,13 +62,18 @@ export default function Dashboard() {
               המשחק הבא
             </CardTitle>
           </CardHeader>
-          <CardContent className="text-center py-8">
-            <p className="text-muted-foreground text-lg">
-              אין משחקים מתוכננים כרגע
-            </p>
-            <p className="text-sm text-muted-foreground mt-2">
-              המשחק הבא ייווצר אוטומטית
-            </p>
+          <CardContent className="space-y-4">
+            <div className="text-center py-4">
+              <p className="text-muted-foreground text-lg">
+                אין משחקים מתוכננים כרגע
+              </p>
+              <p className="text-sm text-muted-foreground mt-2">
+                המשחק הבא ייווצר אוטומטית
+              </p>
+            </div>
+            
+            {/* QR Scanner for Check-in */}
+            <QrScanner />
           </CardContent>
         </Card>
 
