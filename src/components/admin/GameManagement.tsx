@@ -45,13 +45,20 @@ export function GameManagement() {
       nextSaturday.setDate(today.getDate() + daysUntilSaturday);
       const gameDate = nextSaturday.toISOString().split('T')[0];
 
+      // Create proper timestamps for candle lighting and shabbat end
+      const candleLighting = new Date(nextSaturday);
+      candleLighting.setHours(16, 45, 0, 0);
+      
+      const shabbatEnd = new Date(nextSaturday);
+      shabbatEnd.setHours(17, 45, 0, 0);
+
       const { error } = await supabase.from('games').insert({
         date: gameDate,
         kickoff_time: '18:45:00',
         deadline_time: '19:00:00',
         status: 'open_for_all',
-        candle_lighting: '16:45:00',
-        shabbat_end: '17:45:00',
+        candle_lighting: candleLighting.toISOString(),
+        shabbat_end: shabbatEnd.toISOString(),
       });
 
       if (error) throw error;
