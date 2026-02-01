@@ -6,6 +6,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { ArrowRight, Users, Settings, QrCode, FileText, Home, User, ChevronLeft } from 'lucide-react';
 import { UserManagement } from '@/components/admin/UserManagement';
 import { AppSettings } from '@/components/admin/AppSettings';
+import { QrCodeGenerator } from '@/components/admin/QrCodeGenerator';
 
 type AdminView = 'menu' | 'users' | 'settings' | 'qr' | 'rules';
 
@@ -34,7 +35,7 @@ export default function Admin() {
       icon: QrCode,
       title: 'יצירת קוד QR',
       description: "לצ'ק-אין",
-      disabled: true,
+      disabled: false,
     },
     {
       id: 'rules' as AdminView,
@@ -74,6 +75,8 @@ export default function Admin() {
         return <UserManagement />;
       case 'settings':
         return <AppSettings />;
+      case 'qr':
+        return <QrCodeGenerator />;
       case 'menu':
       default:
         return (
