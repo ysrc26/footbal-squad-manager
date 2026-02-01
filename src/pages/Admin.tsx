@@ -7,6 +7,7 @@ import { ArrowRight, Users, Settings, QrCode, FileText, Home, User, ChevronLeft 
 import { UserManagement } from '@/components/admin/UserManagement';
 import { AppSettings } from '@/components/admin/AppSettings';
 import { QrCodeGenerator } from '@/components/admin/QrCodeGenerator';
+import { RulesEditor } from '@/components/admin/RulesEditor';
 
 type AdminView = 'menu' | 'users' | 'settings' | 'qr' | 'rules';
 
@@ -42,7 +43,7 @@ export default function Admin() {
       icon: FileText,
       title: 'עריכת חוקים',
       description: 'תוכן חוקי המשחק',
-      disabled: true,
+      disabled: false,
     },
   ];
 
@@ -77,6 +78,8 @@ export default function Admin() {
         return <AppSettings />;
       case 'qr':
         return <QrCodeGenerator />;
+      case 'rules':
+        return <RulesEditor />;
       case 'menu':
       default:
         return (
