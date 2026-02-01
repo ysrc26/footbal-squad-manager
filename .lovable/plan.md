@@ -1,59 +1,93 @@
 
-## תיקון תצוגת הזמן עד הצ'ק-אין
+
+## תיקון הרשמה חוזרת אחרי ביטול
 
 ### הבעיה
-כאשר הזמן עד המשחק גדול מ-24 שעות, המערכת מציגה רק שעות (למשל "146 שעות ו-43 דקות") במקום להציג ימים, שעות ודקות בצורה קריאה יותר.
+כשמשתמש מבטל הרשמה, הרשומה נשארת בבסיס הנתונים עם סטטוס `cancelled`. כשהוא מנסה להירשם שוב, הקוד מנסה ליצור רשומה חדשה אבל נתקל ב-constraint ייחודי על `(user_id, game_id)`.
 
 ### הפתרון
-לעדכן את הפונקציה `canCheckIn` כך שתזהה מתי יש יותר מ-24 שעות ותציג את הזמן בפורמט "X ימים, Y שעות ו-Z דקות".
+במקום לנסות ליצור רשומה חדשה, נבדוק אם כבר קיימת הרשמה (כולל מבוטלת) ונעדכן אותה.
 
-### שינויים
+### שינויים נדרשים
 
 **קובץ: `src/components/game/GameRegistration.tsx`**
 
-עדכון הלוגיקה בפונקציה `canCheckIn` (שורות 149-156):
+**1. הוספת שאילתה נפרדת לבדיקת הרשמה קודמת של המשתמש:**
 
-**לפני:**
+נוסיף פונקציה שבודקת אם יש הרשמה קיימת (כולל מבוטלת):
+
 ```typescript
-if (minutesUntilKickoff > 20) {
-  const hours = Math.floor(minutesUntilKickoff / 60);
-  const mins = Math.round(minutesUntilKickoff % 60);
-  const timeStr = hours > 0 ? `${hours} שעות ו-${mins} דקות` : `${mins} דקות`;
-  return { 
-    allowed: false, 
-    message: `צ'ק-אין ייפתח עוד ${timeStr}` 
-  };
-}
+const checkExistingRegistration = async () => {
+  if (!currentGame || !user) return null;
+  
+  const { data } = await supabase
+    .from('registrations')
+    .select('*')
+    .eq('game_id', currentGame.id)
+    .eq('user_id', user.id)
+    .maybeSingle();
+    
+  return data;
+};
 ```
 
-**אחרי:**
+**2. עדכון פונקציית `handleRegister`:**
+
+במקום רק INSERT, נבדוק קודם אם יש הרשמה קודמת:
+
 ```typescript
-if (minutesUntilKickoff > 20) {
-  const totalMinutes = minutesUntilKickoff;
-  const days = Math.floor(totalMinutes / (60 * 24));
-  const hours = Math.floor((totalMinutes % (60 * 24)) / 60);
-  const mins = Math.round(totalMinutes % 60);
-  
-  let timeStr = '';
-  if (days > 0) {
-    timeStr = `${days} ${days === 1 ? 'יום' : 'ימים'}`;
-    if (hours > 0) timeStr += `, ${hours} ${hours === 1 ? 'שעה' : 'שעות'}`;
-    if (mins > 0) timeStr += ` ו-${mins} דקות`;
-  } else if (hours > 0) {
-    timeStr = `${hours} ${hours === 1 ? 'שעה' : 'שעות'} ו-${mins} דקות`;
-  } else {
-    timeStr = `${mins} דקות`;
+const handleRegister = async () => {
+  if (!currentGame || !user || !canRegister()) return;
+
+  setRegistering(true);
+  try {
+    const activeCount = registrations.filter((r) => r.status === 'active').length;
+    const newStatus = activeCount < MAX_ACTIVE_PLAYERS ? 'active' : 'standby';
+
+    // בדיקה אם יש הרשמה קיימת (כולל מבוטלת)
+    const existingReg = await checkExistingRegistration();
+
+    if (existingReg) {
+      // עדכון הרשמה קיימת במקום יצירת חדשה
+      const { error } = await supabase
+        .from('registrations')
+        .update({ 
+          status: newStatus, 
+          check_in_status: 'pending',
+          updated_at: new Date().toISOString() 
+        })
+        .eq('id', existingReg.id);
+
+      if (error) throw error;
+    } else {
+      // יצירת הרשמה חדשה
+      const { error } = await supabase.from('registrations').insert({
+        game_id: currentGame.id,
+        user_id: user.id,
+        status: newStatus,
+        check_in_status: 'pending',
+      });
+
+      if (error) throw error;
+    }
+
+    toast.success(
+      newStatus === 'active'
+        ? 'נרשמת בהצלחה! 🎉'
+        : 'נוספת לרשימת ההמתנה 📝'
+    );
+    fetchRegistrations();
+  } catch (error: any) {
+    toast.error('שגיאה בהרשמה', { description: error.message });
+  } finally {
+    setRegistering(false);
   }
-  
-  return { 
-    allowed: false, 
-    message: `צ'ק-אין ייפתח בעוד ${timeStr}` 
-  };
-}
+};
 ```
 
-### דוגמאות לתצוגה החדשה
-- 146 שעות → **6 ימים, 2 שעות ו-43 דקות**
-- 25 שעות → **יום, שעה ו-0 דקות**
-- 3 שעות → **3 שעות ו-0 דקות**
-- 15 דקות → **15 דקות**
+### סיכום השינויים
+| קובץ | שינוי |
+|------|-------|
+| `GameRegistration.tsx` | הוספת פונקציית `checkExistingRegistration` |
+| `GameRegistration.tsx` | עדכון `handleRegister` לטפל בהרשמה חוזרת |
+
