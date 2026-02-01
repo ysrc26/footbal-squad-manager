@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
-import { Loader2, ArrowRight, User, Phone, Home } from 'lucide-react';
+import { Loader2, ArrowRight, User, Phone, Home, Camera } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 
@@ -15,8 +15,10 @@ export default function Profile() {
   const { user, profile, refreshProfile } = useAuth();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [fullName, setFullName] = useState('');
   const [isResident, setIsResident] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (profile) {
@@ -27,6 +29,62 @@ export default function Profile() {
 
   // Check if this is first time setup (no name set yet)
   const isFirstTimeSetup = !profile?.full_name;
+
+  const uploadAvatar = async (file: File) => {
+    if (!user) return;
+
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+      toast.error('יש להעלות קובץ תמונה בלבד');
+      return;
+    }
+
+    // Validate file size (max 5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error('גודל הקובץ מקסימלי הוא 5MB');
+      return;
+    }
+
+    setUploadingAvatar(true);
+    try {
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${user.id}/${Date.now()}.${fileExt}`;
+
+      // Upload to Storage
+      const { error: uploadError } = await supabase.storage
+        .from('avatars')
+        .upload(fileName, file, { upsert: true });
+
+      if (uploadError) throw uploadError;
+
+      // Get public URL
+      const { data: { publicUrl } } = supabase.storage
+        .from('avatars')
+        .getPublicUrl(fileName);
+
+      // Update profile with new avatar URL
+      const { error: updateError } = await supabase
+        .from('profiles')
+        .update({ avatar_url: publicUrl, updated_at: new Date().toISOString() })
+        .eq('id', user.id);
+
+      if (updateError) throw updateError;
+
+      toast.success('תמונת הפרופיל עודכנה!');
+      await refreshProfile();
+    } catch (error: any) {
+      toast.error('שגיאה בהעלאת התמונה', { description: error.message });
+    } finally {
+      setUploadingAvatar(false);
+    }
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      uploadAvatar(file);
+    }
+  };
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -78,10 +136,43 @@ export default function Profile() {
       <main className="container px-4 py-6">
         <Card className="glass neon-border animate-fade-in">
           <CardHeader className="text-center">
-            <div className="mx-auto w-20 h-20 rounded-full bg-primary/20 flex items-center justify-center mb-4">
-              <User className="w-10 h-10 text-primary" />
+            {/* Avatar Section */}
+            <div className="mx-auto relative">
+              {profile?.avatar_url ? (
+                <img 
+                  src={profile.avatar_url} 
+                  alt="תמונת פרופיל"
+                  className="w-24 h-24 rounded-full object-cover border-2 border-primary/50"
+                />
+              ) : (
+                <div className="w-24 h-24 rounded-full bg-primary/20 flex items-center justify-center">
+                  <User className="w-12 h-12 text-primary" />
+                </div>
+              )}
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                onChange={handleFileChange}
+                className="hidden"
+              />
+              <Button
+                type="button"
+                size="sm"
+                variant="secondary"
+                className="absolute -bottom-2 left-1/2 -translate-x-1/2 gap-1"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={uploadingAvatar}
+              >
+                {uploadingAvatar ? (
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                ) : (
+                  <Camera className="h-3 w-3" />
+                )}
+                {uploadingAvatar ? 'מעלה...' : 'שנה תמונה'}
+              </Button>
             </div>
-            <CardTitle>פרטי המשתמש</CardTitle>
+            <CardTitle className="mt-6">פרטי המשתמש</CardTitle>
             <CardDescription>עדכן את הפרטים שלך</CardDescription>
           </CardHeader>
           <CardContent>

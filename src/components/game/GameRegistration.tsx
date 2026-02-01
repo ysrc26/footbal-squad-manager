@@ -13,6 +13,7 @@ import type { Tables } from '@/lib/database.types';
 type Game = Tables<'games'>;
 type Registration = Tables<'registrations'> & {
   full_name: string | null;
+  avatar_url: string | null;
 };
 
 // Fallback values for games without max_players/max_standby
@@ -108,20 +109,21 @@ export function GameRegistration() {
       // Step 3: Fetch profiles for those users
       const { data: profilesData, error: profilesError } = await supabase
         .from('profiles')
-        .select('id, full_name')
+        .select('id, full_name, avatar_url')
         .in('id', userIds);
 
       if (profilesError) throw profilesError;
 
       // Step 4: Create a map for quick lookup
       const profilesMap = new Map(
-        (profilesData || []).map(p => [p.id, p.full_name])
+        (profilesData || []).map(p => [p.id, { full_name: p.full_name, avatar_url: p.avatar_url }])
       );
 
       // Step 5: Merge data
       const mergedRegistrations: Registration[] = regsData.map(reg => ({
         ...reg,
-        full_name: profilesMap.get(reg.user_id) || null,
+        full_name: profilesMap.get(reg.user_id)?.full_name || null,
+        avatar_url: profilesMap.get(reg.user_id)?.avatar_url || null,
       }));
 
       setRegistrations(mergedRegistrations);
@@ -501,10 +503,10 @@ export function GameRegistration() {
 
       {standbyRegistrations.length > 0 && (
         <PlayerList
-          title="רשימת המתנה"
+          title="מזמינים"
           players={standbyRegistrations}
           showPosition
-          emptyMessage="אין שחקנים בהמתנה"
+          emptyMessage="אין מזמינים"
         />
       )}
     </div>

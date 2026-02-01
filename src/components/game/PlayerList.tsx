@@ -1,10 +1,11 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Users, CheckCircle2 } from 'lucide-react';
+import { Users, CheckCircle2, User } from 'lucide-react';
 import type { Tables } from '@/lib/database.types';
 
 type Registration = Tables<'registrations'> & {
   full_name: string | null;
+  avatar_url: string | null;
 };
 
 interface PlayerListProps {
@@ -39,11 +40,21 @@ export function PlayerList({ title, players, maxPlayers, showPosition, emptyMess
                 key={registration.id}
                 className="flex items-center justify-between p-2 rounded-lg bg-secondary/30"
               >
-                <div className="flex items-center gap-3">
-                  {showPosition && (
+              <div className="flex items-center gap-3">
+                  {showPosition ? (
                     <span className="w-6 h-6 rounded-full bg-primary/20 text-primary text-xs flex items-center justify-center font-medium">
                       {index + 1}
                     </span>
+                  ) : registration.avatar_url ? (
+                    <img 
+                      src={registration.avatar_url} 
+                      alt=""
+                      className="w-6 h-6 rounded-full object-cover"
+                    />
+                  ) : (
+                    <div className="w-6 h-6 rounded-full bg-muted flex items-center justify-center">
+                      <User className="w-3 h-3 text-muted-foreground" />
+                    </div>
                   )}
                   <span className="font-medium text-sm">
                     {registration.full_name || 'שחקן אנונימי'}
