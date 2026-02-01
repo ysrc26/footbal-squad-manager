@@ -147,12 +147,25 @@ export function GameRegistration() {
     const minutesUntilKickoff = (kickoff.getTime() - now.getTime()) / (1000 * 60);
     
     if (minutesUntilKickoff > 20) {
-      const hours = Math.floor(minutesUntilKickoff / 60);
-      const mins = Math.round(minutesUntilKickoff % 60);
-      const timeStr = hours > 0 ? `${hours} שעות ו-${mins} דקות` : `${mins} דקות`;
+      const totalMinutes = minutesUntilKickoff;
+      const days = Math.floor(totalMinutes / (60 * 24));
+      const hours = Math.floor((totalMinutes % (60 * 24)) / 60);
+      const mins = Math.round(totalMinutes % 60);
+      
+      let timeStr = '';
+      if (days > 0) {
+        timeStr = `${days} ${days === 1 ? 'יום' : 'ימים'}`;
+        if (hours > 0) timeStr += `, ${hours} ${hours === 1 ? 'שעה' : 'שעות'}`;
+        if (mins > 0) timeStr += ` ו-${mins} דקות`;
+      } else if (hours > 0) {
+        timeStr = `${hours} ${hours === 1 ? 'שעה' : 'שעות'} ו-${mins} דקות`;
+      } else {
+        timeStr = `${mins} דקות`;
+      }
+      
       return { 
         allowed: false, 
-        message: `צ'ק-אין ייפתח עוד ${timeStr}` 
+        message: `צ'ק-אין ייפתח בעוד ${timeStr}` 
       };
     }
     
