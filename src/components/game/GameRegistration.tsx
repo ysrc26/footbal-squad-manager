@@ -205,6 +205,7 @@ export function GameRegistration() {
     const now = new Date();
     const minutesUntilKickoff = (kickoff.getTime() - now.getTime()) / (1000 * 60);
     
+    // Check-in opens 20 minutes before kickoff
     if (minutesUntilKickoff > 20) {
       const totalMinutes = minutesUntilKickoff;
       const days = Math.floor(totalMinutes / (60 * 24));
@@ -228,9 +229,20 @@ export function GameRegistration() {
       };
     }
     
-    if (minutesUntilKickoff < -30) {
-      return { allowed: false, message: 'זמן הצ\'ק-אין הסתיים' };
+    // For auto-generated games: check-in closes at midnight after Shabbat
+    if (currentGame.is_auto_generated) {
+      const gameDate = new Date(currentGame.date);
+      // Midnight after the game date (Sunday 00:00)
+      const midnight = new Date(gameDate);
+      midnight.setDate(midnight.getDate() + 1);
+      midnight.setHours(0, 0, 0, 0);
+      
+      if (now > midnight) {
+        return { allowed: false, message: 'זמן הצ\'ק-אין הסתיים' };
+      }
     }
+    // For manual games: check-in is always open until game is deleted
+    // (no additional closing condition needed)
     
     return { allowed: true, message: 'סרוק QR לצ\'ק-אין' };
   };
