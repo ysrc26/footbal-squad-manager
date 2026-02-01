@@ -1,3 +1,4 @@
+// src/pages/Login.tsx
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -10,9 +11,14 @@ export default function Login() {
 
   const handleGoogleSignIn = async () => {
     setLoading(true);
+    // התיקון כאן: הוספנו את options עם redirectTo
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
+      options: {
+        redirectTo: window.location.origin // זה גורם לו לחזור לכתובת שממנה יצאת (ורצל או לוקלהוסט)
+      }
     });
+    
     if (error) {
       toast.error('שגיאה בהתחברות עם Google', {
         description: error.message,
