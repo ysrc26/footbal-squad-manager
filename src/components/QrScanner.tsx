@@ -20,7 +20,7 @@ interface AppSettings {
   qr_secret_key: string;
 }
 
-type ScanStatus = 'idle' | 'scanning' | 'verifying' | 'success' | 'error';
+type ScanStatus = 'idle' | 'requesting_location' | 'scanning' | 'verifying' | 'success' | 'error';
 
 export function QrScanner({ gameId, onCheckInSuccess }: QrScannerProps) {
   const { user } = useAuth();
@@ -144,10 +144,51 @@ export function QrScanner({ gameId, onCheckInSuccess }: QrScannerProps) {
     });
   };
 
-  const openScanner = () => {
-    setStatus('scanning');
+  const openScanner = async () => {
     setErrorMessage('');
-    setIsOpen(true);
+    
+    // Check if browser supports geolocation
+    if (!navigator.geolocation) {
+      toast.error('הדפדפן לא תומך במיקום GPS');
+      return;
+    }
+
+    setStatus('requesting_location');
+
+    // Request location permission BEFORE opening the scanner
+    try {
+      await new Promise<GeolocationPosition>((resolve, reject) => {
+        navigator.geolocation.getCurrentPosition(resolve, reject, {
+          enableHighAccuracy: true,
+          timeout: 10000,
+        });
+      });
+      
+      // Permission granted - open scanner
+      setStatus('scanning');
+      setIsOpen(true);
+    } catch (error: any) {
+      setStatus('idle');
+      // Permission denied or other error
+      if (error.code === 1) { // PERMISSION_DENIED
+        toast.error('יש לאשר גישה למיקום כדי לבצע צ\'ק-אין', {
+          description: 'לחץ על סמל הנעילה בשורת הכתובת ואפשר גישה למיקום',
+          duration: 5000,
+        });
+      } else if (error.code === 2) { // POSITION_UNAVAILABLE
+        toast.error('מיקום לא זמין', {
+          description: 'בדוק שהמיקום מופעל במכשיר',
+        });
+      } else if (error.code === 3) { // TIMEOUT
+        toast.error('זמן קבלת מיקום פג', {
+          description: 'נסה שוב',
+        });
+      } else {
+        toast.error('לא ניתן לקבל מיקום', {
+          description: 'נסה שוב או בדוק שהמיקום מופעל במכשיר',
+        });
+      }
+    }
   };
 
   const closeScanner = () => {
@@ -171,10 +212,19 @@ export function QrScanner({ gameId, onCheckInSuccess }: QrScannerProps) {
       <Button
         onClick={openScanner}
         className="w-full h-14 text-lg font-semibold neon-glow gap-3"
-        disabled={!appSettings?.qr_secret_key}
+        disabled={!appSettings?.qr_secret_key || status === 'requesting_location'}
       >
-        <QrCode className="h-6 w-6" />
-        סרוק QR לצ'ק-אין
+        {status === 'requesting_location' ? (
+          <>
+            <Loader2 className="h-6 w-6 animate-spin" />
+            מבקש הרשאת מיקום...
+          </>
+        ) : (
+          <>
+            <QrCode className="h-6 w-6" />
+            סרוק QR לצ'ק-אין
+          </>
+        )}
       </Button>
 
       {/* Scanner Dialog */}
