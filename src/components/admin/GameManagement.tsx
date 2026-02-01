@@ -52,10 +52,16 @@ export function GameManagement() {
       const shabbatEnd = new Date(nextSaturday);
       shabbatEnd.setHours(17, 45, 0, 0);
 
+      const kickoffTime = new Date(nextSaturday);
+      kickoffTime.setHours(18, 45, 0, 0);
+
+      const deadlineTime = new Date(nextSaturday);
+      deadlineTime.setHours(19, 0, 0, 0);
+
       const { error } = await supabase.from('games').insert({
         date: gameDate,
-        kickoff_time: '18:45:00',
-        deadline_time: '19:00:00',
+        kickoff_time: kickoffTime.toISOString(),
+        deadline_time: deadlineTime.toISOString(),
         status: 'open_for_all',
         candle_lighting: candleLighting.toISOString(),
         shabbat_end: shabbatEnd.toISOString(),
@@ -95,6 +101,16 @@ export function GameManagement() {
       day: 'numeric',
       month: 'short',
     });
+  };
+
+  const formatTime = (value: string) => {
+    if (!value) return '';
+    // Support both TIME strings ("18:45:00") and ISO timestamps
+    if (value.includes('T')) {
+      const d = new Date(value);
+      return d.toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' });
+    }
+    return value.slice(0, 5);
   };
 
   const getStatusBadge = (status: string) => {
@@ -170,7 +186,7 @@ export function GameManagement() {
                     <div>
                       <p className="font-medium">{formatDate(game.date)}</p>
                       <p className="text-xs text-muted-foreground">
-                        {game.kickoff_time.slice(0, 5)}
+                        {formatTime(game.kickoff_time)}
                       </p>
                     </div>
                     {getStatusBadge(game.status)}
