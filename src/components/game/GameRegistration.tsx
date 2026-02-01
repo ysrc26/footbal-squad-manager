@@ -15,7 +15,9 @@ type Registration = Tables<'registrations'> & {
   full_name: string | null;
 };
 
-const MAX_ACTIVE_PLAYERS = 15;
+// Fallback values for games without max_players/max_standby
+const DEFAULT_MAX_PLAYERS = 15;
+const DEFAULT_MAX_STANDBY = 10;
 
 export function GameRegistration() {
   const { user, profile } = useAuth();
@@ -24,6 +26,10 @@ export function GameRegistration() {
   const [userRegistration, setUserRegistration] = useState<Registration | null>(null);
   const [loading, setLoading] = useState(true);
   const [registering, setRegistering] = useState(false);
+
+  // Use dynamic max_players from game or fallback to default
+  const maxPlayers = currentGame?.max_players ?? DEFAULT_MAX_PLAYERS;
+  const maxStandby = currentGame?.max_standby ?? DEFAULT_MAX_STANDBY;
 
   useEffect(() => {
     fetchCurrentGame();
@@ -201,7 +207,7 @@ export function GameRegistration() {
     setRegistering(true);
     try {
       const activeCount = registrations.filter((r) => r.status === 'active').length;
-      const newStatus = activeCount < MAX_ACTIVE_PLAYERS ? 'active' : 'standby';
+      const newStatus = activeCount < maxPlayers ? 'active' : 'standby';
 
       // Check for existing registration (including cancelled ones)
       const existingReg = await checkExistingRegistration();
@@ -354,7 +360,7 @@ export function GameRegistration() {
             </div>
             <div className="flex items-center gap-2">
               <Users className="h-4 w-4 text-muted-foreground" />
-              <span>{activeRegistrations.length}/{MAX_ACTIVE_PLAYERS}</span>
+              <span>{activeRegistrations.length}/{maxPlayers}</span>
             </div>
           </div>
 
@@ -440,7 +446,7 @@ export function GameRegistration() {
       <PlayerList
         title="שחקנים רשומים"
         players={activeRegistrations}
-        maxPlayers={MAX_ACTIVE_PLAYERS}
+        maxPlayers={maxPlayers}
         emptyMessage="אין שחקנים רשומים עדיין"
       />
 
