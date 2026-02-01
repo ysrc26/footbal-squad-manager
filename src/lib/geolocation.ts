@@ -40,7 +40,7 @@ export function isWithinRadius(
   userLon: number,
   targetLat: number,
   targetLon: number,
-  radiusMeters: number = 10
+  radiusMeters: number = 30
 ): boolean {
   const distance = calculateDistance(userLat, userLon, targetLat, targetLon);
   return distance <= radiusMeters;
