@@ -176,10 +176,23 @@ export function GameRegistration() {
     return { allowed: true, message: 'סרוק QR לצ\'ק-אין' };
   };
 
+  const checkExistingRegistration = async () => {
+    if (!currentGame || !user) return null;
+    
+    const { data } = await supabase
+      .from('registrations')
+      .select('*')
+      .eq('game_id', currentGame.id)
+      .eq('user_id', user.id)
+      .maybeSingle();
+      
+    return data;
+  };
+
   const handleRegister = async () => {
     if (!currentGame || !user || !canRegister()) return;
 
-    // Prevent duplicate registration
+    // Prevent duplicate registration (only for active registrations shown in UI)
     if (userRegistration) {
       toast.error('אתה כבר רשום למשחק זה');
       return;
@@ -188,19 +201,37 @@ export function GameRegistration() {
     setRegistering(true);
     try {
       const activeCount = registrations.filter((r) => r.status === 'active').length;
-      const status = activeCount < MAX_ACTIVE_PLAYERS ? 'active' : 'standby';
+      const newStatus = activeCount < MAX_ACTIVE_PLAYERS ? 'active' : 'standby';
 
-      const { error } = await supabase.from('registrations').insert({
-        game_id: currentGame.id,
-        user_id: user.id,
-        status,
-        check_in_status: 'pending',
-      });
+      // Check for existing registration (including cancelled ones)
+      const existingReg = await checkExistingRegistration();
 
-      if (error) throw error;
+      if (existingReg) {
+        // Update existing registration instead of creating new one
+        const { error } = await supabase
+          .from('registrations')
+          .update({ 
+            status: newStatus, 
+            check_in_status: 'pending',
+            updated_at: new Date().toISOString() 
+          })
+          .eq('id', existingReg.id);
+
+        if (error) throw error;
+      } else {
+        // Create new registration
+        const { error } = await supabase.from('registrations').insert({
+          game_id: currentGame.id,
+          user_id: user.id,
+          status: newStatus,
+          check_in_status: 'pending',
+        });
+
+        if (error) throw error;
+      }
 
       toast.success(
-        status === 'active'
+        newStatus === 'active'
           ? 'נרשמת בהצלחה! 🎉'
           : 'נוספת לרשימת ההמתנה 📝'
       );
