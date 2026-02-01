@@ -1,33 +1,42 @@
+import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import { ArrowRight, Users, Settings, QrCode, FileText, Home, User } from 'lucide-react';
+import { ArrowRight, Users, Settings, QrCode, FileText, Home, User, ChevronLeft } from 'lucide-react';
+import { UserManagement } from '@/components/admin/UserManagement';
+
+type AdminView = 'menu' | 'users' | 'settings' | 'qr' | 'rules';
 
 export default function Admin() {
   const navigate = useNavigate();
   const { isAdmin } = useAuth();
+  const [currentView, setCurrentView] = useState<AdminView>('menu');
 
   const adminCards = [
     {
+      id: 'users' as AdminView,
       icon: Users,
       title: 'ניהול משתמשים',
       description: 'צפייה והרשאות',
-      disabled: true,
+      disabled: false,
     },
     {
+      id: 'settings' as AdminView,
       icon: Settings,
       title: 'הגדרות אפליקציה',
       description: 'GPS, מפתח QR',
       disabled: true,
     },
     {
+      id: 'qr' as AdminView,
       icon: QrCode,
       title: 'יצירת קוד QR',
       description: "לצ'ק-אין",
       disabled: true,
     },
     {
+      id: 'rules' as AdminView,
       icon: FileText,
       title: 'עריכת חוקים',
       description: 'תוכן חוקי המשחק',
@@ -35,44 +44,84 @@ export default function Admin() {
     },
   ];
 
+  const handleBack = () => {
+    if (currentView === 'menu') {
+      navigate(-1);
+    } else {
+      setCurrentView('menu');
+    }
+  };
+
+  const getTitle = () => {
+    switch (currentView) {
+      case 'users':
+        return 'ניהול משתמשים';
+      case 'settings':
+        return 'הגדרות אפליקציה';
+      case 'qr':
+        return 'יצירת קוד QR';
+      case 'rules':
+        return 'עריכת חוקים';
+      default:
+        return 'ניהול מערכת';
+    }
+  };
+
+  const renderContent = () => {
+    switch (currentView) {
+      case 'users':
+        return <UserManagement />;
+      case 'menu':
+      default:
+        return (
+          <div className="space-y-4">
+            {adminCards.map((card, index) => (
+              <Card 
+                key={index} 
+                className={`glass animate-fade-in ${card.disabled ? 'opacity-60' : 'hover:neon-border cursor-pointer'}`}
+                style={{ animationDelay: `${index * 100}ms` }}
+                onClick={() => !card.disabled && setCurrentView(card.id)}
+              >
+                <CardContent className="flex items-center gap-4 py-4">
+                  <div className="w-12 h-12 rounded-full bg-primary/20 flex items-center justify-center">
+                    <card.icon className="h-6 w-6 text-primary" />
+                  </div>
+                  <div className="flex-1">
+                    <p className="font-bold text-lg">{card.title}</p>
+                    <p className="text-sm text-muted-foreground">
+                      {card.description}
+                    </p>
+                  </div>
+                  {card.disabled ? (
+                    <span className="text-xs text-muted-foreground bg-muted px-2 py-1 rounded">
+                      בקרוב
+                    </span>
+                  ) : (
+                    <ChevronLeft className="h-5 w-5 text-muted-foreground" />
+                  )}
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        );
+    }
+  };
+
   return (
     <div className="min-h-screen gradient-dark pb-20">
       {/* Header */}
       <header className="sticky top-0 z-50 glass border-b border-border/50 backdrop-blur-xl">
         <div className="container flex items-center h-16 px-4">
-          <Button variant="ghost" size="icon" onClick={() => navigate(-1)}>
+          <Button variant="ghost" size="icon" onClick={handleBack}>
             <ArrowRight className="h-5 w-5" />
           </Button>
-          <h1 className="text-xl font-bold mr-2">ניהול מערכת</h1>
+          <h1 className="text-xl font-bold mr-2">{getTitle()}</h1>
         </div>
       </header>
 
       {/* Main Content */}
-      <main className="container px-4 py-6 space-y-4">
-        {adminCards.map((card, index) => (
-          <Card 
-            key={index} 
-            className={`glass animate-fade-in ${card.disabled ? 'opacity-60' : 'hover:neon-border cursor-pointer'}`}
-            style={{ animationDelay: `${index * 100}ms` }}
-          >
-            <CardContent className="flex items-center gap-4 py-4">
-              <div className="w-12 h-12 rounded-full bg-primary/20 flex items-center justify-center">
-                <card.icon className="h-6 w-6 text-primary" />
-              </div>
-              <div className="flex-1">
-                <p className="font-bold text-lg">{card.title}</p>
-                <p className="text-sm text-muted-foreground">
-                  {card.description}
-                </p>
-              </div>
-              {card.disabled && (
-                <span className="text-xs text-muted-foreground bg-muted px-2 py-1 rounded">
-                  בקרוב
-                </span>
-              )}
-            </CardContent>
-          </Card>
-        ))}
+      <main className="container px-4 py-6">
+        {renderContent()}
       </main>
 
       {/* Bottom Navigation */}
