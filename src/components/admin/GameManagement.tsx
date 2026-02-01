@@ -4,7 +4,9 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
-import { Loader2, Calendar, Plus, Trash2, Users } from 'lucide-react';
+import { Loader2, Calendar, Plus, Trash2, Users, Bot, FlaskConical, Wand2 } from 'lucide-react';
+import { CreateGameForm } from './CreateGameForm';
+import { createWeeklyGame } from '@/lib/autoGameCreation';
 import type { Tables } from '@/lib/database.types';
 
 type Game = Tables<'games'>;
@@ -12,7 +14,8 @@ type Game = Tables<'games'>;
 export function GameManagement() {
   const [games, setGames] = useState<Game[]>([]);
   const [loading, setLoading] = useState(true);
-  const [creating, setCreating] = useState(false);
+  const [creatingAuto, setCreatingAuto] = useState(false);
+  const [showCreateForm, setShowCreateForm] = useState(false);
 
   useEffect(() => {
     fetchGames();
@@ -35,46 +38,21 @@ export function GameManagement() {
     }
   };
 
-  const createTestGame = async () => {
-    setCreating(true);
+  const handleCreateAutoGame = async () => {
+    setCreatingAuto(true);
     try {
-      // Create a game for next Saturday
-      const today = new Date();
-      const daysUntilSaturday = (6 - today.getDay() + 7) % 7 || 7;
-      const nextSaturday = new Date(today);
-      nextSaturday.setDate(today.getDate() + daysUntilSaturday);
-      const gameDate = nextSaturday.toISOString().split('T')[0];
-
-      // Create proper timestamps for candle lighting and shabbat end
-      const candleLighting = new Date(nextSaturday);
-      candleLighting.setHours(16, 45, 0, 0);
+      const result = await createWeeklyGame();
       
-      const shabbatEnd = new Date(nextSaturday);
-      shabbatEnd.setHours(17, 45, 0, 0);
-
-      const kickoffTime = new Date(nextSaturday);
-      kickoffTime.setHours(18, 45, 0, 0);
-
-      const deadlineTime = new Date(nextSaturday);
-      deadlineTime.setHours(19, 0, 0, 0);
-
-      const { error } = await supabase.from('games').insert({
-        date: gameDate,
-        kickoff_time: kickoffTime.toISOString(),
-        deadline_time: deadlineTime.toISOString(),
-        status: 'open_for_all',
-        candle_lighting: candleLighting.toISOString(),
-        shabbat_end: shabbatEnd.toISOString(),
-      });
-
-      if (error) throw error;
-
-      toast.success('משחק לבדיקה נוצר בהצלחה!');
-      fetchGames();
+      if (result.success) {
+        toast.success(result.message);
+        fetchGames();
+      } else {
+        toast.error(result.message);
+      }
     } catch (error: any) {
-      toast.error('שגיאה ביצירת משחק', { description: error.message });
+      toast.error('שגיאה ביצירת משחק אוטומטי', { description: error.message });
     } finally {
-      setCreating(false);
+      setCreatingAuto(false);
     }
   };
 
@@ -127,6 +105,23 @@ export function GameManagement() {
     return <Badge variant={s.variant}>{s.label}</Badge>;
   };
 
+  const getGameTypeBadge = (game: Game) => {
+    if (game.is_auto_generated) {
+      return (
+        <Badge variant="outline" className="gap-1 text-xs border-primary/50 text-primary">
+          <Bot className="h-3 w-3" />
+          אוטו
+        </Badge>
+      );
+    }
+    return (
+      <Badge variant="outline" className="gap-1 text-xs border-amber-500/50 text-amber-500">
+        <FlaskConical className="h-3 w-3" />
+        בדיקה
+      </Badge>
+    );
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -145,23 +140,42 @@ export function GameManagement() {
           </CardTitle>
           <CardDescription>יצירה וניהול משחקים שבועיים</CardDescription>
         </CardHeader>
-        <CardContent className="space-y-4">
+        <CardContent className="space-y-3">
+          {/* Manual Game Creation Button */}
           <Button
-            onClick={createTestGame}
-            disabled={creating}
+            variant="outline"
+            onClick={() => setShowCreateForm(!showCreateForm)}
+            className="w-full gap-2"
+          >
+            <Plus className="h-4 w-4" />
+            {showCreateForm ? 'סגור טופס' : 'צור משחק ידני לבדיקה'}
+          </Button>
+
+          {/* Auto Game Creation Button */}
+          <Button
+            onClick={handleCreateAutoGame}
+            disabled={creatingAuto}
             className="w-full gap-2 neon-glow"
           >
-            {creating ? (
+            {creatingAuto ? (
               <Loader2 className="h-4 w-4 animate-spin" />
             ) : (
               <>
-                <Plus className="h-4 w-4" />
-                צור משחק לבדיקה (שבת הקרובה)
+                <Wand2 className="h-4 w-4" />
+                צור משחק אוטומטי (לפי זמני שבת)
               </>
             )}
           </Button>
         </CardContent>
       </Card>
+
+      {/* Create Game Form */}
+      {showCreateForm && (
+        <CreateGameForm
+          onClose={() => setShowCreateForm(false)}
+          onGameCreated={fetchGames}
+        />
+      )}
 
       <Card className="glass">
         <CardHeader>
@@ -182,14 +196,20 @@ export function GameManagement() {
                   key={game.id}
                   className="flex items-center justify-between p-3 rounded-lg bg-secondary/30"
                 >
-                  <div className="flex items-center gap-3">
-                    <div>
-                      <p className="font-medium">{formatDate(game.date)}</p>
-                      <p className="text-xs text-muted-foreground">
+                  <div className="flex flex-col gap-1">
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium">{formatDate(game.date)}</span>
+                      <span className="text-xs text-muted-foreground">
                         {formatTime(game.kickoff_time)}
-                      </p>
+                      </span>
                     </div>
-                    {getStatusBadge(game.status)}
+                    <div className="flex items-center gap-2">
+                      {getStatusBadge(game.status)}
+                      {getGameTypeBadge(game)}
+                      <span className="text-xs text-muted-foreground">
+                        {game.max_players}/{game.max_standby} שחקנים/המתנה
+                      </span>
+                    </div>
                   </div>
                   <Button
                     variant="ghost"

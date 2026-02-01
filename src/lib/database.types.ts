@@ -104,6 +104,11 @@ export interface Database {
           deadline_time: string
           kickoff_time: string
           status: GameStatus
+          is_auto_generated: boolean
+          max_players: number
+          max_standby: number
+          registration_opens_at: string | null
+          wave1_registration_opens_at: string | null
           created_at: string
           updated_at: string
         }
@@ -115,6 +120,11 @@ export interface Database {
           deadline_time: string
           kickoff_time: string
           status?: GameStatus
+          is_auto_generated?: boolean
+          max_players?: number
+          max_standby?: number
+          registration_opens_at?: string | null
+          wave1_registration_opens_at?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -126,6 +136,11 @@ export interface Database {
           deadline_time?: string
           kickoff_time?: string
           status?: GameStatus
+          is_auto_generated?: boolean
+          max_players?: number
+          max_standby?: number
+          registration_opens_at?: string | null
+          wave1_registration_opens_at?: string | null
           created_at?: string
           updated_at?: string
         }
