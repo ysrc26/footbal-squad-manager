@@ -4,7 +4,7 @@ import { Users, CheckCircle2 } from 'lucide-react';
 import type { Tables } from '@/lib/database.types';
 
 type Registration = Tables<'registrations'> & {
-  profiles: { full_name: string | null } | null;
+  full_name: string | null;
 };
 
 interface PlayerListProps {
@@ -46,7 +46,7 @@ export function PlayerList({ title, players, maxPlayers, showPosition, emptyMess
                     </span>
                   )}
                   <span className="font-medium text-sm">
-                    {registration.profiles?.full_name || 'שחקן אנונימי'}
+                    {registration.full_name || 'שחקן אנונימי'}
                   </span>
                 </div>
                 {registration.check_in_status === 'checked_in' && (

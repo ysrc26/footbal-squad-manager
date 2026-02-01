@@ -5,14 +5,14 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
-import { Loader2, Calendar, Clock, Users, UserPlus, UserMinus, CheckCircle2 } from 'lucide-react';
+import { Loader2, Calendar, Clock, Users, UserPlus, UserMinus, CheckCircle2, QrCode } from 'lucide-react';
 import { QrScanner } from '@/components/QrScanner';
 import { PlayerList } from './PlayerList';
 import type { Tables } from '@/lib/database.types';
 
 type Game = Tables<'games'>;
 type Registration = Tables<'registrations'> & {
-  profiles: { full_name: string | null } | null;
+  full_name: string | null;
 };
 
 const MAX_ACTIVE_PLAYERS = 15;
@@ -80,18 +80,47 @@ export function GameRegistration() {
     if (!currentGame || !user) return;
 
     try {
-      const { data, error } = await supabase
+      // Step 1: Fetch registrations without JOIN
+      const { data: regsData, error: regsError } = await supabase
         .from('registrations')
-        .select('*, profiles(full_name)')
+        .select('*')
         .eq('game_id', currentGame.id)
         .neq('status', 'cancelled')
         .order('created_at', { ascending: true });
 
-      if (error) throw error;
+      if (regsError) throw regsError;
 
-      setRegistrations(data as Registration[]);
+      if (!regsData || regsData.length === 0) {
+        setRegistrations([]);
+        setUserRegistration(null);
+        return;
+      }
+
+      // Step 2: Get unique user IDs
+      const userIds = [...new Set(regsData.map(r => r.user_id))];
+
+      // Step 3: Fetch profiles for those users
+      const { data: profilesData, error: profilesError } = await supabase
+        .from('profiles')
+        .select('id, full_name')
+        .in('id', userIds);
+
+      if (profilesError) throw profilesError;
+
+      // Step 4: Create a map for quick lookup
+      const profilesMap = new Map(
+        (profilesData || []).map(p => [p.id, p.full_name])
+      );
+
+      // Step 5: Merge data
+      const mergedRegistrations: Registration[] = regsData.map(reg => ({
+        ...reg,
+        full_name: profilesMap.get(reg.user_id) || null,
+      }));
+
+      setRegistrations(mergedRegistrations);
       setUserRegistration(
-        (data as Registration[]).find((r) => r.user_id === user.id) || null
+        mergedRegistrations.find((r) => r.user_id === user.id) || null
       );
     } catch (error: any) {
       console.error('Error fetching registrations:', error);
@@ -108,8 +137,40 @@ export function GameRegistration() {
     return currentGame.status === 'open_for_all';
   };
 
+  const canCheckIn = (): { allowed: boolean; message: string } => {
+    if (!currentGame?.kickoff_time) {
+      return { allowed: false, message: 'זמן המשחק לא מוגדר' };
+    }
+    
+    const kickoff = new Date(currentGame.kickoff_time);
+    const now = new Date();
+    const minutesUntilKickoff = (kickoff.getTime() - now.getTime()) / (1000 * 60);
+    
+    if (minutesUntilKickoff > 20) {
+      const hours = Math.floor(minutesUntilKickoff / 60);
+      const mins = Math.round(minutesUntilKickoff % 60);
+      const timeStr = hours > 0 ? `${hours} שעות ו-${mins} דקות` : `${mins} דקות`;
+      return { 
+        allowed: false, 
+        message: `צ'ק-אין ייפתח עוד ${timeStr}` 
+      };
+    }
+    
+    if (minutesUntilKickoff < -30) {
+      return { allowed: false, message: 'זמן הצ\'ק-אין הסתיים' };
+    }
+    
+    return { allowed: true, message: 'סרוק QR לצ\'ק-אין' };
+  };
+
   const handleRegister = async () => {
     if (!currentGame || !user || !canRegister()) return;
+
+    // Prevent duplicate registration
+    if (userRegistration) {
+      toast.error('אתה כבר רשום למשחק זה');
+      return;
+    }
 
     setRegistering(true);
     try {
@@ -197,6 +258,7 @@ export function GameRegistration() {
   const standbyRegistrations = registrations.filter((r) => r.status === 'standby');
   const isRegistered = !!userRegistration;
   const isCheckedIn = userRegistration?.check_in_status === 'checked_in';
+  const checkInStatus = canCheckIn();
 
   if (loading) {
     return (
@@ -296,9 +358,19 @@ export function GameRegistration() {
             </Button>
           ) : !isCheckedIn ? (
             <div className="space-y-2">
-              {/* QR Scanner for Check-in - Only for registered players */}
+              {/* QR Scanner for Check-in - Only for registered active players */}
               {userRegistration.status === 'active' && (
-                <QrScanner gameId={currentGame.id} onCheckInSuccess={fetchRegistrations} />
+                checkInStatus.allowed ? (
+                  <QrScanner gameId={currentGame.id} onCheckInSuccess={fetchRegistrations} />
+                ) : (
+                  <Button
+                    disabled
+                    className="w-full h-14 text-lg font-semibold gap-3"
+                  >
+                    <QrCode className="h-6 w-6" />
+                    {checkInStatus.message}
+                  </Button>
+                )
               )}
               <Button
                 variant="outline"
