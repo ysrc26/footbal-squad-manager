@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { ArrowRight, Users, Settings, QrCode, FileText, Home, User, ChevronLeft } from 'lucide-react';
 import { UserManagement } from '@/components/admin/UserManagement';
+import { AppSettings } from '@/components/admin/AppSettings';
 
 type AdminView = 'menu' | 'users' | 'settings' | 'qr' | 'rules';
 
@@ -26,7 +27,7 @@ export default function Admin() {
       icon: Settings,
       title: 'הגדרות אפליקציה',
       description: 'GPS, מפתח QR',
-      disabled: true,
+      disabled: false,
     },
     {
       id: 'qr' as AdminView,
@@ -71,6 +72,8 @@ export default function Admin() {
     switch (currentView) {
       case 'users':
         return <UserManagement />;
+      case 'settings':
+        return <AppSettings />;
       case 'menu':
       default:
         return (
