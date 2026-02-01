@@ -101,7 +101,7 @@ export default function Login() {
           <div className="mx-auto w-16 h-16 rounded-full bg-primary/20 flex items-center justify-center neon-glow">
             <Shield className="w-8 h-8 text-primary" />
           </div>
-          <CardTitle className="text-2xl font-bold neon-text">כדורגל נהלים</CardTitle>
+          <CardTitle className="text-2xl font-bold neon-text">כדורגל נחלים</CardTitle>
           <CardDescription className="text-muted-foreground">
             {step === 'phone' 
               ? 'הזן את מספר הטלפון שלך להתחברות'

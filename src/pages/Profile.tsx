@@ -107,7 +107,7 @@ export default function Profile() {
                   <Home className="h-5 w-5 text-primary" />
                   <div>
                     <Label htmlFor="isResident" className="text-base font-medium cursor-pointer">
-                      תושב נהלים
+                      תושב נחלים
                     </Label>
                     <p className="text-sm text-muted-foreground">
                       תושבים מקבלים עדיפות בהרשמה
