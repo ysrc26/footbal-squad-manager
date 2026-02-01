@@ -42,7 +42,7 @@ export default function Onboarding() {
   const [otp, setOtp] = useState('');
   const [step, setStep] = useState<'phone' | 'otp'>('phone');
   const [loading, setLoading] = useState(false);
-  const { user, profile, loading: authLoading, signInWithOtp, verifyOtp, refreshProfile } = useAuth();
+  const { user, profile, loading: authLoading, refreshProfile } = useAuth();
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -65,7 +65,9 @@ export default function Onboarding() {
 
     setLoading(true);
     const formattedPhone = formatToInternational(phone);
-    const { error } = await signInWithOtp(formattedPhone);
+    const { error } = await supabase.auth.updateUser({
+      phone: formattedPhone,
+    });
 
     if (error) {
       toast.error('שגיאה בשליחת קוד האימות', {
@@ -88,7 +90,11 @@ export default function Onboarding() {
 
     setLoading(true);
     const formattedPhone = formatToInternational(phone);
-    const { error } = await verifyOtp(formattedPhone, otp);
+    const { error } = await supabase.auth.verifyOtp({
+      phone: formattedPhone,
+      token: otp,
+      type: 'phone_change',
+    });
 
     if (error) {
       toast.error('קוד אימות שגוי', {
