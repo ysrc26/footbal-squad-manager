@@ -65,6 +65,7 @@ export default function Onboarding() {
 
     setLoading(true);
     const formattedPhone = formatToInternational(phone);
+    console.log('SUPABASE_URL', import.meta.env.VITE_SUPABASE_URL);
     const { error } = await supabase.auth.updateUser({
       phone: formattedPhone,
     });
