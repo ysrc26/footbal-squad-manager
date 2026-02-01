@@ -2,15 +2,15 @@ import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { LogOut, User, Settings, FileText, Home, Calendar } from 'lucide-react';
+import { LogOut, User, Settings, FileText, Home } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import { QrScanner } from '@/components/QrScanner';
+import { GameRegistration } from '@/components/game/GameRegistration';
 
 export default function Dashboard() {
   const { user, profile, isAdmin, signOut } = useAuth();
 
   return (
-    <div className="min-h-screen gradient-dark">
+    <div className="min-h-screen gradient-dark pb-20">
       {/* Header */}
       <header className="sticky top-0 z-50 glass border-b border-border/50 backdrop-blur-xl">
         <div className="container flex items-center justify-between h-16 px-4">
@@ -54,28 +54,8 @@ export default function Dashboard() {
           </CardContent>
         </Card>
 
-        {/* Game Status Card - Placeholder */}
-        <Card className="glass animate-fade-in">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Calendar className="h-5 w-5 text-primary" />
-              המשחק הבא
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="text-center py-4">
-              <p className="text-muted-foreground text-lg">
-                אין משחקים מתוכננים כרגע
-              </p>
-              <p className="text-sm text-muted-foreground mt-2">
-                המשחק הבא ייווצר אוטומטית
-              </p>
-            </div>
-            
-            {/* QR Scanner for Check-in */}
-            <QrScanner />
-          </CardContent>
-        </Card>
+        {/* Game Registration */}
+        <GameRegistration />
 
         {/* Quick Actions */}
         <div className="grid grid-cols-2 gap-4">
