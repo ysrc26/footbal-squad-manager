@@ -7,12 +7,15 @@ export default {
   theme: {
     container: {
       center: true,
-      padding: "2rem",
+      padding: "1rem",
       screens: {
         "2xl": "1400px",
       },
     },
     extend: {
+      fontFamily: {
+        sans: ["Heebo", "system-ui", "sans-serif"],
+      },
       colors: {
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",
@@ -47,6 +50,13 @@ export default {
           DEFAULT: "hsl(var(--card))",
           foreground: "hsl(var(--card-foreground))",
         },
+        neon: {
+          DEFAULT: "hsl(var(--neon-green))",
+          glow: "hsl(var(--neon-green-glow))",
+        },
+        success: "hsl(var(--success))",
+        warning: "hsl(var(--warning))",
+        info: "hsl(var(--info))",
         sidebar: {
           DEFAULT: "hsl(var(--sidebar-background))",
           foreground: "hsl(var(--sidebar-foreground))",
@@ -65,25 +75,31 @@ export default {
       },
       keyframes: {
         "accordion-down": {
-          from: {
-            height: "0",
-          },
-          to: {
-            height: "var(--radix-accordion-content-height)",
-          },
+          from: { height: "0" },
+          to: { height: "var(--radix-accordion-content-height)" },
         },
         "accordion-up": {
-          from: {
-            height: "var(--radix-accordion-content-height)",
+          from: { height: "var(--radix-accordion-content-height)" },
+          to: { height: "0" },
+        },
+        "pulse-neon": {
+          "0%, 100%": { 
+            boxShadow: "0 0 20px hsl(115 100% 62% / 0.4), 0 0 40px hsl(115 100% 62% / 0.2)" 
           },
-          to: {
-            height: "0",
+          "50%": { 
+            boxShadow: "0 0 30px hsl(115 100% 62% / 0.6), 0 0 60px hsl(115 100% 62% / 0.3)" 
           },
+        },
+        "fade-in": {
+          from: { opacity: "0", transform: "translateY(10px)" },
+          to: { opacity: "1", transform: "translateY(0)" },
         },
       },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
         "accordion-up": "accordion-up 0.2s ease-out",
+        "pulse-neon": "pulse-neon 2s ease-in-out infinite",
+        "fade-in": "fade-in 0.3s ease-out",
       },
     },
   },
