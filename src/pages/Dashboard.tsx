@@ -13,7 +13,7 @@ export default function Dashboard() {
       {/* Header */}
       <header className="sticky top-0 z-50 glass border-b border-border/50 backdrop-blur-xl">
         <div className="container flex items-center justify-between h-16 px-4">
-          <h1 className="text-xl font-bold neon-text">כדורגל נהלים</h1>
+          <h1 className="text-xl font-bold neon-text">כדורגל נחלים</h1>
           <div className="flex items-center gap-2">
             {isAdmin && (
               <Badge variant="outline" className="border-primary text-primary">
@@ -47,7 +47,7 @@ export default function Dashboard() {
           <CardContent>
             {profile?.is_resident && (
               <Badge className="bg-primary/20 text-primary border border-primary">
-                🏠 תושב נהלים
+                🏠 תושב נחלים
               </Badge>
             )}
           </CardContent>
