@@ -1,202 +1,178 @@
 
 
-## הוספת יצירה ידנית ואוטומטית של משחקים
+## תיקון שני באגים: הרשמה לא-תושבים ועריכת סטטוס תושבות
 
-### סקירה כללית
-המערכת תתמוך בשני סוגי משחקים:
-1. **משחקי בדיקה** - נוצרים ידנית על ידי מנהל עם כל הפרמטרים הניתנים לעריכה
-2. **משחקים שבועיים אוטומטיים** - נוצרים אוטומטית **ביום ראשון בבוקר** לשבת הקרובה לפי זמני שבת מ-Hebcal API
+### סקירה
 
----
+**בעיה 1: משתמש לא-תושב לא יכול להירשם**
+הפונקציה `canRegister()` בודקת רק את השדה `status` של המשחק בבסיס הנתונים. כשיוצרים משחק עם סטטוס `open_for_residents`, הסטטוס לא מתעדכן אוטומטית ל-`open_for_all` כשמגיע זמן ה-Wave 2.
 
-### שלב 1: עדכון סכמת בסיס הנתונים
-
-נוסיף שדות חדשים לטבלת `games`:
-
-```sql
-ALTER TABLE games ADD COLUMN IF NOT EXISTS is_auto_generated BOOLEAN DEFAULT false;
-ALTER TABLE games ADD COLUMN IF NOT EXISTS max_players INTEGER DEFAULT 15;
-ALTER TABLE games ADD COLUMN IF NOT EXISTS max_standby INTEGER DEFAULT 10;
-ALTER TABLE games ADD COLUMN IF NOT EXISTS registration_opens_at TIMESTAMPTZ;
-ALTER TABLE games ADD COLUMN IF NOT EXISTS wave1_registration_opens_at TIMESTAMPTZ;
-```
-
-| שדה | תיאור | ברירת מחדל |
-|-----|-------|-------------|
-| `is_auto_generated` | האם נוצר אוטומטית | `false` |
-| `max_players` | מקסימום שחקנים פעילים | `15` |
-| `max_standby` | מקסימום ממתינים | `10` |
-| `registration_opens_at` | מתי ההרשמה נפתחת לכולם (Wave 2) | - |
-| `wave1_registration_opens_at` | מתי ההרשמה נפתחת לתושבים (Wave 1) | - |
+**בעיה 2: משתמש יכול לשנות סטטוס תושב בכל עת**
+כרגע כל משתמש יכול להגדיר ולשנות את הסטטוס שלו כ"תושב" בכל זמן. הדרישה היא שמשתמש יוכל להגדיר זאת רק בפעם הראשונה (כשהפרופיל ריק), ואחרי זה רק מנהל יכול לשנות.
 
 ---
 
-### שלב 2: עדכון טיפוסי TypeScript
+### פתרון בעיה 1: לוגיקת זמן ב-canRegister
 
-עדכון `src/lib/database.types.ts` עם השדות החדשים.
-
----
-
-### שלב 3: טופס יצירת משחק ידני חדש
-
-יצירת קומפוננטה חדשה `src/components/admin/CreateGameForm.tsx`:
-
-**שדות הטופס:**
-- תאריך משחק
-- שעת התחלה (Kickoff)
-- דד-ליין להרשמה
-- מספר שחקנים מקסימלי (ברירת מחדל: 15)
-- מספר ממתינים מקסימלי (ברירת מחדל: 10)
-- פתיחת הרשמה לתושבים (Wave 1)
-- פתיחת הרשמה לכולם (Wave 2)
-- סטטוס התחלתי
-
-```text
-┌─────────────────────────────────────────┐
-│  יצירת משחק חדש                         │
-├─────────────────────────────────────────┤
-│  תאריך:           [____________]        │
-│  שעת התחלה:       [__:__]               │
-│  דד-ליין:         [____________] [__:__] │
-│                                         │
-│  מקסימום שחקנים:     [15___]            │
-│  מקסימום ממתינים:    [10___]            │
-│                                         │
-│  Wave 1 (תושבים):  [____________]        │
-│  Wave 2 (כולם):    [____________]        │
-│                                         │
-│  סטטוס: [מתוכנן]                        │
-│                                         │
-│  [    צור משחק לבדיקה    ]              │
-└─────────────────────────────────────────┘
-```
-
----
-
-### שלב 4: שילוב Hebcal API
-
-יצירת `src/lib/hebcal.ts`:
+עדכון הפונקציה `canRegister()` ב-`GameRegistration.tsx` לבדוק גם את הזמנים:
 
 ```typescript
-interface ShabbatTimes {
-  date: string;           // תאריך שבת (YYYY-MM-DD)
-  candleLighting: Date;   // הדלקת נרות
-  havdalah: Date;         // הבדלה
-}
-
-// שליפת זמני שבת מ-Hebcal API לנחלים, ישראל
-export async function getNextShabbatTimes(): Promise<ShabbatTimes>
-
-// חישוב זמני משחק לפי שבת
-export function calculateGameTimes(shabbatTimes: ShabbatTimes)
+const canRegister = () => {
+  if (!currentGame) return false;
+  
+  const now = new Date();
+  
+  // בדיקה לפי זמני הרשמה מהמשחק
+  if (currentGame.registration_opens_at) {
+    const wave2Opens = new Date(currentGame.registration_opens_at);
+    if (now >= wave2Opens) {
+      // אחרי זמן Wave 2 - פתוח לכולם
+      return true;
+    }
+  }
+  
+  if (currentGame.wave1_registration_opens_at) {
+    const wave1Opens = new Date(currentGame.wave1_registration_opens_at);
+    if (now >= wave1Opens && profile?.is_resident) {
+      // אחרי זמן Wave 1 ולפני Wave 2 - פתוח לתושבים בלבד
+      return true;
+    }
+  }
+  
+  // Fallback לסטטוס ישן (לתמיכה לאחור)
+  if (currentGame.status === 'open_for_residents') {
+    return profile?.is_resident === true;
+  }
+  
+  return currentGame.status === 'open_for_all';
+};
 ```
 
-**Hebcal API:**
-```text
-URL: https://www.hebcal.com/shabbat
-Parameters:
-  - cfg=json (פורמט JSON)
-  - geonameid=294071 (נחלים, ישראל)
-  - M=on (זמני הבדלה)
-```
+**עדכון הצגת הסטטוס בכפתור:**
+גם הטקסט בכפתור צריך להתעדכן בהתאם לזמן הנוכחי ולא רק לסטטוס בבסיס הנתונים.
 
 ---
 
-### שלב 5: יצירה אוטומטית של משחקים
+### פתרון בעיה 2: הגבלת עריכת סטטוס תושב
 
-יצירת `src/lib/autoGameCreation.ts`:
+**עדכון `Profile.tsx`:**
 
-**לוגיקת יצירה:**
-1. בדוק אם כבר קיים משחק לשבת הקרובה
-2. שלוף זמני שבת מ-Hebcal
-3. חשב את כל הזמנים
-4. צור משחק חדש
+הוספת לוגיקה לזהות אם זו הפעם הראשונה שהמשתמש מגדיר את הפרופיל:
 
-**לוגיקת זמנים אוטומטית:**
-```text
-יצירת משחק  = יום ראשון בבוקר (לפני פתיחת ההרשמה ביום שישי)
-Wave 1 (תושבים) = יום שישי 12:00
-Wave 2 (כולם)   = candle_lighting - 60 דקות
-Deadline        = havdalah + 60 דקות (מעוגל לחצי שעה)
-Kickoff         = deadline - 15 דקות
+```typescript
+// בדיקה אם זו הגדרה ראשונה (פרופיל חדש)
+const isFirstTimeSetup = !profile?.full_name;
+
+// ב-JSX: הצגת מתג תושב רק בהגדרה ראשונה
+{isFirstTimeSetup ? (
+  <div className="flex items-center justify-between p-4 rounded-lg bg-secondary/50">
+    <div className="flex items-center gap-3">
+      <Home className="h-5 w-5 text-primary" />
+      <div>
+        <Label htmlFor="isResident" className="text-base font-medium cursor-pointer">
+          תושב נחלים
+        </Label>
+        <p className="text-sm text-muted-foreground">
+          תושבים מקבלים עדיפות בהרשמה
+        </p>
+      </div>
+    </div>
+    <Switch
+      id="isResident"
+      checked={isResident}
+      onCheckedChange={setIsResident}
+    />
+  </div>
+) : (
+  // תצוגה בלבד - לא ניתן לשנות
+  <div className="flex items-center justify-between p-4 rounded-lg bg-muted/50">
+    <div className="flex items-center gap-3">
+      <Home className="h-5 w-5 text-muted-foreground" />
+      <div>
+        <span className="text-base font-medium">תושב נחלים</span>
+        <p className="text-sm text-muted-foreground">
+          {profile?.is_resident ? 'כן' : 'לא'} - לשינוי פנה למנהל
+        </p>
+      </div>
+    </div>
+    <Badge variant={profile?.is_resident ? 'default' : 'secondary'}>
+      {profile?.is_resident ? 'תושב' : 'לא תושב'}
+    </Badge>
+  </div>
+)}
 ```
 
+**עדכון `handleSave`:**
+לא לשלוח את שדה `is_resident` אם זה לא הגדרה ראשונה.
+
 ---
 
-### שלב 6: עדכון ממשק ניהול המשחקים
+### פתרון בעיה 2 (חלק ב): מנהל יכול לשנות סטטוס תושב
 
-עדכון `src/components/admin/GameManagement.tsx`:
+**עדכון `UserManagement.tsx`:**
 
-```text
-┌─────────────────────────────────────────┐
-│  ניהול משחקים                           │
-├─────────────────────────────────────────┤
-│                                         │
-│  [צור משחק ידני לבדיקה]                 │
-│                                         │
-│  [צור משחק אוטומטי (לפי זמני שבת)]      │
-│                                         │
-├─────────────────────────────────────────┤
-│  משחקים קיימים                          │
-├─────────────────────────────────────────┤
-│  ┌─────────────────────────────────────┐│
-│  │ שבת 08/02 │ 18:45 │ פתוח │ [אוטו]  ││
-│  │ 15/15 שחקנים  Wave2: פתוח          ││
-│  │ [ערוך] [מחק]                       ││
-│  └─────────────────────────────────────┘│
-│  ┌─────────────────────────────────────┐│
-│  │ שבת 15/02 │ 20:00 │ מתוכנן │ [בדיקה]││
-│  │ 0/20 שחקנים (משחק בדיקה)           ││
-│  │ [ערוך] [מחק]                       ││
-│  └─────────────────────────────────────┘│
-└─────────────────────────────────────────┘
+הוספת מתג נוסף לכל משתמש לשינוי סטטוס תושב:
 
-[אוטו] = משחק אוטומטי (לפי זמני שבת)
-[בדיקה] = משחק בדיקה (הגדרות ידניות)
+```typescript
+const toggleResidentStatus = async (userId: string, currentIsResident: boolean) => {
+  setUpdating(userId);
+  try {
+    const { error } = await supabase
+      .from('profiles')
+      .update({ 
+        is_resident: !currentIsResident,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', userId);
+
+    if (error) throw error;
+    toast.success(currentIsResident ? 'סטטוס תושב הוסר' : 'סטטוס תושב ניתן');
+
+    // Update local state
+    setUsers(prev =>
+      prev.map(user =>
+        user.id === userId ? { ...user, is_resident: !currentIsResident } : user
+      )
+    );
+  } catch (error: any) {
+    toast.error('שגיאה בעדכון סטטוס', { description: error.message });
+  } finally {
+    setUpdating(null);
+  }
+};
 ```
 
----
-
-### שלב 7: עדכון GameRegistration
-
-עדכון `src/components/game/GameRegistration.tsx`:
-- שימוש ב-`max_players` מבסיס הנתונים במקום קבוע
-- הצגת זמני פתיחת הרשמה
-- לוגיקת `canRegister()` מעודכנת לפי הזמנים מהמשחק
+**עדכון ה-UI:**
+הוספת מתג "תושב" ליד מתג "מנהל" בכל שורת משתמש.
 
 ---
 
-### סיכום קבצים
+### סיכום השינויים
 
-| קובץ | פעולה |
+| קובץ | שינוי |
 |------|-------|
-| `src/lib/database.types.ts` | עדכון טיפוסים |
-| `src/lib/hebcal.ts` | **חדש** - שילוב Hebcal API |
-| `src/lib/autoGameCreation.ts` | **חדש** - יצירה אוטומטית |
-| `src/components/admin/CreateGameForm.tsx` | **חדש** - טופס יצירה ידנית |
-| `src/components/admin/GameManagement.tsx` | עדכון ממשק |
-| `src/components/game/GameRegistration.tsx` | תמיכה ב-max_players דינמי |
+| `src/components/game/GameRegistration.tsx` | עדכון `canRegister()` לבדוק זמנים, לא רק סטטוס |
+| `src/pages/Profile.tsx` | הסתרת מתג תושב לאחר הגדרה ראשונה |
+| `src/components/admin/UserManagement.tsx` | הוספת יכולת למנהל לשנות סטטוס תושב |
 
 ---
 
-### תזמון יצירת משחקים
+### לוגיקת הרשמה חדשה
 
 ```text
-יום ראשון בבוקר
+זמן נוכחי >= registration_opens_at?
         │
-        ▼
-  יצירת משחק אוטומטי לשבת הקרובה
-        │
-        ▼
-  יום שישי 12:00 ──► Wave 1 נפתח (תושבים)
-        │
-        ▼
-  הדלקת נרות - 60 דקות ──► Wave 2 נפתח (כולם)
-        │
-        ▼
-  הבדלה + 60 דקות ──► דד-ליין (מעוגל ל-:00/:30)
-        │
-        ▼
-  דד-ליין - 15 דקות ──► Kickoff
+    ┌───┴───┐
+   כן       לא
+    │        │
+    ▼        ▼
+כולם יכולים  זמן נוכחי >= wave1_registration_opens_at?
+להירשם              │
+             ┌──────┴──────┐
+            כן             לא
+             │              │
+             ▼              ▼
+      רק תושבים      אף אחד לא יכול
+      יכולים         להירשם
 ```
 
