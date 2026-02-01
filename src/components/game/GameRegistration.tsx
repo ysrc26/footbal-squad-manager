@@ -136,11 +136,62 @@ export function GameRegistration() {
   const canRegister = () => {
     if (!currentGame) return false;
     
+    const now = new Date();
+    
+    // Wave 2: Open for all - check timestamp first
+    if (currentGame.registration_opens_at) {
+      const wave2Opens = new Date(currentGame.registration_opens_at);
+      if (now >= wave2Opens) {
+        return true;
+      }
+    }
+    
+    // Wave 1: Open for residents only
+    if (currentGame.wave1_registration_opens_at) {
+      const wave1Opens = new Date(currentGame.wave1_registration_opens_at);
+      if (now >= wave1Opens && profile?.is_resident) {
+        return true;
+      }
+    }
+    
+    // Fallback to status field for backward compatibility
     if (currentGame.status === 'open_for_residents') {
       return profile?.is_resident === true;
     }
     
     return currentGame.status === 'open_for_all';
+  };
+
+  const getRegistrationStatusText = () => {
+    if (!currentGame) return 'ההרשמה סגורה';
+    
+    const now = new Date();
+    
+    // Wave 2: Open for all
+    if (currentGame.registration_opens_at) {
+      const wave2Opens = new Date(currentGame.registration_opens_at);
+      if (now >= wave2Opens) {
+        return 'הירשם למשחק';
+      }
+    }
+    
+    // Wave 1: Open for residents only
+    if (currentGame.wave1_registration_opens_at) {
+      const wave1Opens = new Date(currentGame.wave1_registration_opens_at);
+      if (now >= wave1Opens) {
+        return profile?.is_resident ? 'הירשם למשחק' : 'ההרשמה פתוחה לתושבים בלבד';
+      }
+    }
+    
+    // Fallback to status field
+    if (currentGame.status === 'open_for_all') {
+      return 'הירשם למשחק';
+    }
+    if (currentGame.status === 'open_for_residents') {
+      return profile?.is_resident ? 'הירשם למשחק' : 'ההרשמה פתוחה לתושבים בלבד';
+    }
+    
+    return 'ההרשמה סגורה';
   };
 
   const canCheckIn = (): { allowed: boolean; message: string } => {
@@ -400,9 +451,7 @@ export function GameRegistration() {
               ) : (
                 <>
                   <UserPlus className="h-5 w-5" />
-                  {canRegister() ? 'הירשם למשחק' : 
-                    currentGame.status === 'open_for_residents' ? 'ההרשמה פתוחה לתושבים בלבד' :
-                    'ההרשמה סגורה'}
+                  {getRegistrationStatusText()}
                 </>
               )}
             </Button>

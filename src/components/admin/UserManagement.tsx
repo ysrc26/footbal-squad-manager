@@ -107,6 +107,35 @@ export function UserManagement() {
     }
   };
 
+  const toggleResidentStatus = async (userId: string, currentIsResident: boolean) => {
+    setUpdating(userId);
+    try {
+      const { error } = await supabase
+        .from('profiles')
+        .update({ 
+          is_resident: !currentIsResident,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', userId);
+
+      if (error) throw error;
+      toast.success(currentIsResident ? 'סטטוס תושב הוסר' : 'סטטוס תושב ניתן');
+
+      // Update local state
+      setUsers(prev =>
+        prev.map(user =>
+          user.id === userId ? { ...user, is_resident: !currentIsResident } : user
+        )
+      );
+    } catch (error: any) {
+      toast.error('שגיאה בעדכון סטטוס', {
+        description: error.message,
+      });
+    } finally {
+      setUpdating(null);
+    }
+  };
+
   const filteredUsers = users.filter(user => {
     if (!searchQuery) return true;
     const query = searchQuery.toLowerCase();
@@ -191,16 +220,29 @@ export function UserManagement() {
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm text-muted-foreground">מנהל</span>
-                    {updating === user.id ? (
-                      <Loader2 className="h-5 w-5 animate-spin text-primary" />
-                    ) : (
-                      <Switch
-                        checked={user.isAdmin}
-                        onCheckedChange={() => toggleAdminRole(user.id, user.isAdmin)}
-                      />
-                    )}
+                  <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm text-muted-foreground">תושב</span>
+                      {updating === user.id ? (
+                        <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                      ) : (
+                        <Switch
+                          checked={user.is_resident}
+                          onCheckedChange={() => toggleResidentStatus(user.id, user.is_resident)}
+                        />
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm text-muted-foreground">מנהל</span>
+                      {updating === user.id ? (
+                        <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                      ) : (
+                        <Switch
+                          checked={user.isAdmin}
+                          onCheckedChange={() => toggleAdminRole(user.id, user.isAdmin)}
+                        />
+                      )}
+                    </div>
                   </div>
                 </div>
               ))

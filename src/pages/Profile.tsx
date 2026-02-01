@@ -5,6 +5,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 import { Loader2, ArrowRight, User, Phone, Home } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
@@ -24,21 +25,31 @@ export default function Profile() {
     }
   }, [profile]);
 
+  // Check if this is first time setup (no name set yet)
+  const isFirstTimeSetup = !profile?.full_name;
+
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user) return;
     
     setLoading(true);
     
+    // Only include is_resident on first time setup
+    const updateData: Record<string, unknown> = {
+      id: user.id,
+      full_name: fullName,
+      phone_number: user.phone || null,
+      updated_at: new Date().toISOString(),
+    };
+    
+    // Only set is_resident on first time setup
+    if (isFirstTimeSetup) {
+      updateData.is_resident = isResident;
+    }
+    
     const { error } = await supabase
       .from('profiles')
-      .upsert({
-        id: user.id,
-        full_name: fullName,
-        is_resident: isResident,
-        phone_number: user.phone || null,
-        updated_at: new Date().toISOString(),
-      });
+      .upsert(updateData);
     
     if (error) {
       toast.error('שגיאה בשמירת הפרופיל', {
@@ -102,24 +113,41 @@ export default function Profile() {
                 />
               </div>
 
-              <div className="flex items-center justify-between p-4 rounded-lg bg-secondary/50">
-                <div className="flex items-center gap-3">
-                  <Home className="h-5 w-5 text-primary" />
-                  <div>
-                    <Label htmlFor="isResident" className="text-base font-medium cursor-pointer">
-                      תושב נחלים
-                    </Label>
-                    <p className="text-sm text-muted-foreground">
-                      תושבים מקבלים עדיפות בהרשמה
-                    </p>
+              {isFirstTimeSetup ? (
+                <div className="flex items-center justify-between p-4 rounded-lg bg-secondary/50">
+                  <div className="flex items-center gap-3">
+                    <Home className="h-5 w-5 text-primary" />
+                    <div>
+                      <Label htmlFor="isResident" className="text-base font-medium cursor-pointer">
+                        תושב נחלים
+                      </Label>
+                      <p className="text-sm text-muted-foreground">
+                        תושבים מקבלים עדיפות בהרשמה
+                      </p>
+                    </div>
                   </div>
+                  <Switch
+                    id="isResident"
+                    checked={isResident}
+                    onCheckedChange={setIsResident}
+                  />
                 </div>
-                <Switch
-                  id="isResident"
-                  checked={isResident}
-                  onCheckedChange={setIsResident}
-                />
-              </div>
+              ) : (
+                <div className="flex items-center justify-between p-4 rounded-lg bg-muted/50">
+                  <div className="flex items-center gap-3">
+                    <Home className="h-5 w-5 text-muted-foreground" />
+                    <div>
+                      <span className="text-base font-medium">תושב נחלים</span>
+                      <p className="text-sm text-muted-foreground">
+                        {profile?.is_resident ? 'כן' : 'לא'} - לשינוי פנה למנהל
+                      </p>
+                    </div>
+                  </div>
+                  <Badge variant={profile?.is_resident ? 'default' : 'secondary'}>
+                    {profile?.is_resident ? 'תושב' : 'לא תושב'}
+                  </Badge>
+                </div>
+              )}
 
               <Button 
                 type="submit" 
