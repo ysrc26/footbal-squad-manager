@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -27,6 +27,7 @@ export function GameRegistration() {
   const [userRegistration, setUserRegistration] = useState<Registration | null>(null);
   const [loading, setLoading] = useState(true);
   const [registering, setRegistering] = useState(false);
+  const autoPromoteInFlightRef = useRef(false);
 
   // Use dynamic max_players from game or fallback to default
   const maxPlayers = currentGame?.max_players ?? DEFAULT_MAX_PLAYERS;
@@ -127,9 +128,39 @@ export function GameRegistration() {
       }));
 
       setRegistrations(mergedRegistrations);
-      setUserRegistration(
-        mergedRegistrations.find((r) => r.user_id === user.id) || null
-      );
+      const myReg = mergedRegistrations.find((r) => r.user_id === user.id) || null;
+      setUserRegistration(myReg);
+
+      // Auto-promotion (self) for the first standby player when a spot opens.
+      // This avoids requiring permission to update other users' registrations.
+      if (myReg?.status === 'standby') {
+        const activeCount = mergedRegistrations.filter((r) => r.status === 'active').length;
+        if (activeCount < maxPlayers) {
+          const standby = mergedRegistrations.filter((r) => r.status === 'standby');
+          const isFirstStandby = standby[0]?.id === myReg.id;
+
+          if (isFirstStandby && !autoPromoteInFlightRef.current) {
+            autoPromoteInFlightRef.current = true;
+            try {
+              const { error: promoteSelfError } = await supabase
+                .from('registrations')
+                .update({
+                  status: 'active',
+                  updated_at: new Date().toISOString(),
+                })
+                .eq('id', myReg.id)
+                .eq('user_id', user.id);
+
+              if (promoteSelfError) throw promoteSelfError;
+              toast.success('קודמת לרשימת השחקנים הרשומים 🎉');
+            } catch (error: any) {
+              console.error('Error auto-promoting standby registration:', error);
+            } finally {
+              autoPromoteInFlightRef.current = false;
+            }
+          }
+        }
+      }
     } catch (error: any) {
       console.error('Error fetching registrations:', error);
     }
@@ -335,16 +366,27 @@ export function GameRegistration() {
 
       // If this was an active registration, promote the first standby player
       if (wasActive) {
-        const firstStandby = standbyRegistrations[0];
-        if (firstStandby) {
+        // Fetch first standby from the server to avoid using stale client state.
+        const { data: firstStandby, error: standbyError } = await supabase
+          .from('registrations')
+          .select('id')
+          .eq('game_id', currentGame.id)
+          .eq('status', 'standby')
+          .order('created_at', { ascending: true })
+          .limit(1)
+          .maybeSingle();
+
+        if (standbyError) {
+          console.error('Error fetching first standby registration:', standbyError);
+        } else if (firstStandby) {
           const { error: promoteError } = await supabase
             .from('registrations')
-            .update({ 
-              status: 'active', 
-              updated_at: new Date().toISOString() 
+            .update({
+              status: 'active',
+              updated_at: new Date().toISOString(),
             })
             .eq('id', firstStandby.id);
-          
+
           if (promoteError) {
             console.error('Error promoting standby player:', promoteError);
           }
