@@ -33,10 +33,18 @@ export default function Dashboard() {
         {/* Welcome Card */}
         <Card className="glass neon-border animate-fade-in">
           <CardHeader>
-            <CardTitle className="flex items-center gap-3">
-              <div className="w-12 h-12 rounded-full bg-primary/20 flex items-center justify-center">
-                <User className="w-6 h-6 text-primary" />
-              </div>
+        <CardTitle className="flex items-center gap-3">
+              {profile?.avatar_url ? (
+                <img 
+                  src={profile.avatar_url} 
+                  alt="תמונת פרופיל"
+                  className="w-12 h-12 rounded-full object-cover"
+                />
+              ) : (
+                <div className="w-12 h-12 rounded-full bg-primary/20 flex items-center justify-center">
+                  <User className="w-6 h-6 text-primary" />
+                </div>
+              )}
               <div>
                 <p className="text-lg">שלום,</p>
                 <p className="text-2xl font-bold neon-text">
