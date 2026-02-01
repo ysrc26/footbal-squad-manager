@@ -56,6 +56,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   useEffect(() => {
+    const handleOAuthCallback = async () => {
+      const url = new URL(window.location.href);
+      const code = url.searchParams.get('code');
+      if (code) {
+        await supabase.auth.exchangeCodeForSession(window.location.href);
+      }
+    };
+
+    handleOAuthCallback();
+
     // Set up auth state listener FIRST
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
