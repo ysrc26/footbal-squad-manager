@@ -3,13 +3,14 @@ import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import { ArrowRight, Users, Settings, QrCode, FileText, Home, User, ChevronLeft } from 'lucide-react';
+import { ArrowRight, Users, Settings, QrCode, FileText, Home, User, ChevronLeft, Calendar } from 'lucide-react';
 import { UserManagement } from '@/components/admin/UserManagement';
 import { AppSettings } from '@/components/admin/AppSettings';
 import { QrCodeGenerator } from '@/components/admin/QrCodeGenerator';
 import { RulesEditor } from '@/components/admin/RulesEditor';
+import { GameManagement } from '@/components/admin/GameManagement';
 
-type AdminView = 'menu' | 'users' | 'settings' | 'qr' | 'rules';
+type AdminView = 'menu' | 'users' | 'settings' | 'qr' | 'rules' | 'games';
 
 export default function Admin() {
   const navigate = useNavigate();
@@ -17,6 +18,13 @@ export default function Admin() {
   const [currentView, setCurrentView] = useState<AdminView>('menu');
 
   const adminCards = [
+    {
+      id: 'games' as AdminView,
+      icon: Calendar,
+      title: 'ניהול משחקים',
+      description: 'יצירת וניהול משחקים',
+      disabled: false,
+    },
     {
       id: 'users' as AdminView,
       icon: Users,
@@ -57,6 +65,8 @@ export default function Admin() {
 
   const getTitle = () => {
     switch (currentView) {
+      case 'games':
+        return 'ניהול משחקים';
       case 'users':
         return 'ניהול משתמשים';
       case 'settings':
@@ -72,6 +82,8 @@ export default function Admin() {
 
   const renderContent = () => {
     switch (currentView) {
+      case 'games':
+        return <GameManagement />;
       case 'users':
         return <UserManagement />;
       case 'settings':
