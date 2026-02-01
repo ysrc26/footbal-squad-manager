@@ -303,17 +303,41 @@ export function GameRegistration() {
   };
 
   const handleCancelRegistration = async () => {
-    if (!userRegistration || !user) return;
+    if (!userRegistration || !user || !currentGame) return;
 
     setRegistering(true);
     try {
+      const wasActive = userRegistration.status === 'active';
+      
       const { error } = await supabase
         .from('registrations')
-        .update({ status: 'cancelled', updated_at: new Date().toISOString() })
+        .update({ 
+          status: 'cancelled', 
+          check_in_status: 'pending',
+          updated_at: new Date().toISOString() 
+        })
         .eq('id', userRegistration.id)
         .eq('user_id', user.id);
 
       if (error) throw error;
+
+      // If this was an active registration, promote the first standby player
+      if (wasActive) {
+        const firstStandby = standbyRegistrations[0];
+        if (firstStandby) {
+          const { error: promoteError } = await supabase
+            .from('registrations')
+            .update({ 
+              status: 'active', 
+              updated_at: new Date().toISOString() 
+            })
+            .eq('id', firstStandby.id);
+          
+          if (promoteError) {
+            console.error('Error promoting standby player:', promoteError);
+          }
+        }
+      }
 
       toast.success('ההרשמה בוטלה');
       fetchRegistrations();
@@ -457,10 +481,10 @@ export function GameRegistration() {
                 </>
               )}
             </Button>
-          ) : !isCheckedIn ? (
+          ) : (
             <div className="space-y-2">
-              {/* QR Scanner for Check-in - Only for registered active players */}
-              {userRegistration.status === 'active' && (
+              {/* QR Scanner for Check-in - Only for registered active players who haven't checked in */}
+              {userRegistration.status === 'active' && !isCheckedIn && (
                 checkInStatus.allowed ? (
                   <QrScanner gameId={currentGame.id} onCheckInSuccess={fetchRegistrations} />
                 ) : (
@@ -473,6 +497,7 @@ export function GameRegistration() {
                   </Button>
                 )
               )}
+              {/* Cancel button - always available for registered players */}
               <Button
                 variant="outline"
                 onClick={handleCancelRegistration}
@@ -489,7 +514,7 @@ export function GameRegistration() {
                 )}
               </Button>
             </div>
-          ) : null}
+          )}
         </CardContent>
       </Card>
 
