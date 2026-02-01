@@ -183,8 +183,14 @@ export function GameRegistration() {
     });
   };
 
-  const formatTime = (timeStr: string) => {
-    return timeStr.slice(0, 5);
+  const formatTime = (value: string) => {
+    if (!value) return '';
+    // Support both TIME strings ("18:45:00") and ISO timestamps
+    if (value.includes('T')) {
+      const d = new Date(value);
+      return d.toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' });
+    }
+    return value.slice(0, 5);
   };
 
   const activeRegistrations = registrations.filter((r) => r.status === 'active');
