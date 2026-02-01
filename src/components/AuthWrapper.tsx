@@ -1,3 +1,4 @@
+// src/components/AuthWrapper.tsx
 import { useEffect, useState, type ReactNode } from 'react';
 import { Navigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
@@ -15,28 +16,37 @@ export default function AuthWrapper({ children, requireAdmin = false }: AuthWrap
   const [checkingProfile, setCheckingProfile] = useState(false);
 
   useEffect(() => {
-    if (!loading && user && profile === null && !checkingProfile) {
+    // הוספנו תנאי: תריץ את זה רק אם אנחנו לא כבר בודקים
+    if (!loading && user && !profile && !checkingProfile) {
       setCheckingProfile(true);
+      
       const ensureProfile = async () => {
-        const { error } = await supabase.from('profiles').upsert({
-          id: user.id,
-          full_name: user.user_metadata?.full_name ?? user.user_metadata?.name ?? null,
-          avatar_url: user.user_metadata?.avatar_url ?? null,
-        });
-        if (error) {
-          throw error;
+        try {
+          const { error } = await supabase.from('profiles').upsert({
+            id: user.id,
+            full_name: user.user_metadata?.full_name ?? user.user_metadata?.name ?? null,
+            avatar_url: user.user_metadata?.avatar_url ?? null,
+            // אנחנו לא דורסים את הטלפון אם הוא קיים, ה-upsert מטפל בזה
+          }, { onConflict: 'id' }); // חשוב לוודא שלא נוצרות כפילויות
+
+          if (error) throw error;
+          
+          // מושכים את הפרופיל העדכני מיד אחרי היצירה
+          await refreshProfile();
+          
+        } catch (error: any) {
+          console.error("Profile creation error:", error);
+          toast.error('שגיאה ביצירת פרופיל משתמש');
+        } finally {
+          setCheckingProfile(false);
         }
       };
 
-      ensureProfile()
-        .then(() => refreshProfile())
-        .catch(() => {
-          toast.error('שגיאה בהתחברות, אנא נסה שנית');
-        })
-        .finally(() => setCheckingProfile(false));
+      ensureProfile();
     }
   }, [loading, user, profile, checkingProfile, refreshProfile]);
 
+  // 1. קודם כל מטפלים בטעינה הכללית
   if (loading || checkingProfile) {
     return (
       <div className="min-h-screen flex items-center justify-center gradient-dark">
@@ -45,14 +55,27 @@ export default function AuthWrapper({ children, requireAdmin = false }: AuthWrap
     );
   }
 
+  // 2. אם אין יוזר בכלל - זרוק ללוגין
   if (!user) {
     return <Navigate to="/login" replace />;
   }
 
-  if (profile?.phone_number == null) {
+  // 3. התיקון הקריטי: אם יש יוזר אבל הפרופיל עדיין לא נטען (למרות שסיימנו loading)
+  // זה אומר שאנחנו בשלב ביניים - עדיף להציג טעינה מאשר לזרוק החוצה
+  if (!profile) {
+    return (
+      <div className="min-h-screen flex items-center justify-center gradient-dark">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  // 4. עכשיו בטוח יש פרופיל, אפשר לבדוק טלפון
+  if (!profile.phone_number) {
     return <Navigate to="/onboarding" replace />;
   }
 
+  // 5. בדיקת אדמין אם צריך
   if (requireAdmin && !isAdmin) {
     return <Navigate to="/" replace />;
   }
