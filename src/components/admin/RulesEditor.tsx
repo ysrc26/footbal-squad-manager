@@ -113,6 +113,17 @@ export function RulesEditor() {
 
   const hasChanges = rulesContent !== originalContent;
 
+  // Parse inline bold text **text** -> <strong>
+  const parseInlineStyles = (text: string) => {
+    const parts = text.split(/(\*\*[^*]+\*\*)/g);
+    return parts.map((part, i) => {
+      if (part.startsWith('**') && part.endsWith('**')) {
+        return <strong key={i} className="font-bold">{part.slice(2, -2)}</strong>;
+      }
+      return part;
+    });
+  };
+
   // Simple markdown renderer for preview
   const renderMarkdown = (text: string) => {
     return text
@@ -120,19 +131,19 @@ export function RulesEditor() {
       .map((line, index) => {
         // Headers
         if (line.startsWith('# ')) {
-          return <h1 key={index} className="text-2xl font-bold mb-4 text-primary">{line.slice(2)}</h1>;
+          return <h1 key={index} className="text-2xl font-bold mb-4 text-primary">{parseInlineStyles(line.slice(2))}</h1>;
         }
         if (line.startsWith('## ')) {
-          return <h2 key={index} className="text-xl font-bold mt-6 mb-3">{line.slice(3)}</h2>;
+          return <h2 key={index} className="text-xl font-bold mt-6 mb-3">{parseInlineStyles(line.slice(3))}</h2>;
         }
         if (line.startsWith('### ')) {
-          return <h3 key={index} className="text-lg font-semibold mt-4 mb-2">{line.slice(4)}</h3>;
+          return <h3 key={index} className="text-lg font-semibold mt-4 mb-2">{parseInlineStyles(line.slice(4))}</h3>;
         }
         // List items
         if (line.startsWith('- ')) {
           return (
             <li key={index} className="mr-4 mb-1 list-disc list-inside">
-              {line.slice(2)}
+              {parseInlineStyles(line.slice(2))}
             </li>
           );
         }
@@ -141,7 +152,7 @@ export function RulesEditor() {
           return <br key={index} />;
         }
         // Regular paragraphs
-        return <p key={index} className="mb-2">{line}</p>;
+        return <p key={index} className="mb-2">{parseInlineStyles(line)}</p>;
       });
   };
 
