@@ -53,10 +53,34 @@ export default function Rules() {
                 <Loader2 className="h-8 w-8 animate-spin text-primary" />
               </div>
             ) : rules ? (
-              <div 
-                className="prose prose-invert max-w-none"
-                dangerouslySetInnerHTML={{ __html: rules }}
-              />
+              <div className="space-y-2">
+                {rules.split('\n').map((line, index) => {
+                  // Headers
+                  if (line.startsWith('# ')) {
+                    return <h1 key={index} className="text-2xl font-bold mb-4 text-primary">{line.slice(2)}</h1>;
+                  }
+                  if (line.startsWith('## ')) {
+                    return <h2 key={index} className="text-xl font-bold mt-6 mb-3">{line.slice(3)}</h2>;
+                  }
+                  if (line.startsWith('### ')) {
+                    return <h3 key={index} className="text-lg font-semibold mt-4 mb-2">{line.slice(4)}</h3>;
+                  }
+                  // List items
+                  if (line.startsWith('- ')) {
+                    return (
+                      <li key={index} className="mr-4 mb-1 list-disc list-inside">
+                        {line.slice(2)}
+                      </li>
+                    );
+                  }
+                  // Empty lines
+                  if (line.trim() === '') {
+                    return <br key={index} />;
+                  }
+                  // Regular paragraphs
+                  return <p key={index} className="mb-2">{line}</p>;
+                })}
+              </div>
             ) : (
               <div className="text-center py-8">
                 <p className="text-muted-foreground">
