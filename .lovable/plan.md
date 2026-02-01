@@ -1,104 +1,202 @@
 
 
-## תיקון בקשת הרשאות מיקום לצ'ק-אין
+## הוספת יצירה ידנית ואוטומטית של משחקים
 
-### הבעיה
-כשמשתמש לוחץ על "סרוק QR לצ'ק-אין", הסורק נפתח מיד אבל **הבקשה להרשאת מיקום מגיעה רק אחרי סריקה מוצלחת**. אם המשתמש עוד לא אישר הרשאות מיקום, הוא רואה הודעת שגיאה במקום בקשת הרשאה מסודרת מהדפדפן.
+### סקירה כללית
+המערכת תתמוך בשני סוגי משחקים:
+1. **משחקי בדיקה** - נוצרים ידנית על ידי מנהל עם כל הפרמטרים הניתנים לעריכה
+2. **משחקים שבועיים אוטומטיים** - נוצרים אוטומטית **ביום ראשון בבוקר** לשבת הקרובה לפי זמני שבת מ-Hebcal API
 
-### הפתרון
-לבקש הרשאת מיקום **לפני** פתיחת סורק ה-QR:
+---
 
-1. כשמשתמש לוחץ על כפתור "סרוק QR", נבקש קודם גישה למיקום
-2. אם המשתמש מאשר → הסורק נפתח
-3. אם המשתמש דוחה → מוצגת הודעה ברורה שנדרשת הרשאת מיקום
+### שלב 1: עדכון סכמת בסיס הנתונים
 
-### שינויים נדרשים
+נוסיף שדות חדשים לטבלת `games`:
 
-**קובץ: `src/components/QrScanner.tsx`**
-
-**1. עדכון הפונקציה `openScanner`:**
-
-```typescript
-const openScanner = async () => {
-  setErrorMessage('');
-  
-  // בדיקה שהדפדפן תומך במיקום
-  if (!navigator.geolocation) {
-    toast.error('הדפדפן לא תומך במיקום GPS');
-    return;
-  }
-
-  // בקשת הרשאת מיקום לפני פתיחת הסורק
-  try {
-    await new Promise<GeolocationPosition>((resolve, reject) => {
-      navigator.geolocation.getCurrentPosition(resolve, reject, {
-        enableHighAccuracy: true,
-        timeout: 10000,
-      });
-    });
-    
-    // הרשאה התקבלה - פתיחת הסורק
-    setStatus('scanning');
-    setIsOpen(true);
-  } catch (error: any) {
-    // הרשאה נדחתה או שגיאה אחרת
-    if (error.code === 1) { // PERMISSION_DENIED
-      toast.error('יש לאשר גישה למיקום כדי לבצע צ\'ק-אין', {
-        description: 'לחץ על סמל הנעילה בשורת הכתובת ואפשר גישה למיקום',
-        duration: 5000,
-      });
-    } else {
-      toast.error('לא ניתן לקבל מיקום', {
-        description: 'נסה שוב או בדוק שהמיקום מופעל במכשיר',
-      });
-    }
-  }
-};
+```sql
+ALTER TABLE games ADD COLUMN IF NOT EXISTS is_auto_generated BOOLEAN DEFAULT false;
+ALTER TABLE games ADD COLUMN IF NOT EXISTS max_players INTEGER DEFAULT 15;
+ALTER TABLE games ADD COLUMN IF NOT EXISTS max_standby INTEGER DEFAULT 10;
+ALTER TABLE games ADD COLUMN IF NOT EXISTS registration_opens_at TIMESTAMPTZ;
+ALTER TABLE games ADD COLUMN IF NOT EXISTS wave1_registration_opens_at TIMESTAMPTZ;
 ```
 
-**2. הוספת מצב `requesting_location` (אופציונלי - לחוויה טובה יותר):**
+| שדה | תיאור | ברירת מחדל |
+|-----|-------|-------------|
+| `is_auto_generated` | האם נוצר אוטומטית | `false` |
+| `max_players` | מקסימום שחקנים פעילים | `15` |
+| `max_standby` | מקסימום ממתינים | `10` |
+| `registration_opens_at` | מתי ההרשמה נפתחת לכולם (Wave 2) | - |
+| `wave1_registration_opens_at` | מתי ההרשמה נפתחת לתושבים (Wave 1) | - |
 
-נוסיף מצב ביניים שמראה למשתמש שאנחנו מבקשים הרשאת מיקום:
+---
 
-```typescript
-type ScanStatus = 'idle' | 'requesting_location' | 'scanning' | 'verifying' | 'success' | 'error';
-```
+### שלב 2: עדכון טיפוסי TypeScript
 
-**3. הצגת מסך טעינה בזמן בקשת הרשאה:**
+עדכון `src/lib/database.types.ts` עם השדות החדשים.
 
-בכפתור הסורק, אם `status === 'requesting_location'`:
-```typescript
-<Button disabled className="w-full h-14 ...">
-  <Loader2 className="h-6 w-6 animate-spin" />
-  מבקש הרשאת מיקום...
-</Button>
-```
+---
 
-### תרשים זרימה חדש
+### שלב 3: טופס יצירת משחק ידני חדש
+
+יצירת קומפוננטה חדשה `src/components/admin/CreateGameForm.tsx`:
+
+**שדות הטופס:**
+- תאריך משחק
+- שעת התחלה (Kickoff)
+- דד-ליין להרשמה
+- מספר שחקנים מקסימלי (ברירת מחדל: 15)
+- מספר ממתינים מקסימלי (ברירת מחדל: 10)
+- פתיחת הרשמה לתושבים (Wave 1)
+- פתיחת הרשמה לכולם (Wave 2)
+- סטטוס התחלתי
 
 ```text
-לחיצה על "סרוק QR"
-        ↓
-   בקשת הרשאת מיקום
-        ↓
-    ┌─────┴─────┐
-    ↓           ↓
- אושר        נדחה
-    ↓           ↓
-פתיחת סורק   הודעת שגיאה
-    ↓        עם הנחיות
- סריקת QR
-    ↓
- אימות מיקום
-    ↓
-  צ'ק-אין!
+┌─────────────────────────────────────────┐
+│  יצירת משחק חדש                         │
+├─────────────────────────────────────────┤
+│  תאריך:           [____________]        │
+│  שעת התחלה:       [__:__]               │
+│  דד-ליין:         [____________] [__:__] │
+│                                         │
+│  מקסימום שחקנים:     [15___]            │
+│  מקסימום ממתינים:    [10___]            │
+│                                         │
+│  Wave 1 (תושבים):  [____________]        │
+│  Wave 2 (כולם):    [____________]        │
+│                                         │
+│  סטטוס: [מתוכנן]                        │
+│                                         │
+│  [    צור משחק לבדיקה    ]              │
+└─────────────────────────────────────────┘
 ```
 
-### סיכום השינויים
+---
 
-| קובץ | שינוי |
+### שלב 4: שילוב Hebcal API
+
+יצירת `src/lib/hebcal.ts`:
+
+```typescript
+interface ShabbatTimes {
+  date: string;           // תאריך שבת (YYYY-MM-DD)
+  candleLighting: Date;   // הדלקת נרות
+  havdalah: Date;         // הבדלה
+}
+
+// שליפת זמני שבת מ-Hebcal API לנחלים, ישראל
+export async function getNextShabbatTimes(): Promise<ShabbatTimes>
+
+// חישוב זמני משחק לפי שבת
+export function calculateGameTimes(shabbatTimes: ShabbatTimes)
+```
+
+**Hebcal API:**
+```text
+URL: https://www.hebcal.com/shabbat
+Parameters:
+  - cfg=json (פורמט JSON)
+  - geonameid=294071 (נחלים, ישראל)
+  - M=on (זמני הבדלה)
+```
+
+---
+
+### שלב 5: יצירה אוטומטית של משחקים
+
+יצירת `src/lib/autoGameCreation.ts`:
+
+**לוגיקת יצירה:**
+1. בדוק אם כבר קיים משחק לשבת הקרובה
+2. שלוף זמני שבת מ-Hebcal
+3. חשב את כל הזמנים
+4. צור משחק חדש
+
+**לוגיקת זמנים אוטומטית:**
+```text
+יצירת משחק  = יום ראשון בבוקר (לפני פתיחת ההרשמה ביום שישי)
+Wave 1 (תושבים) = יום שישי 12:00
+Wave 2 (כולם)   = candle_lighting - 60 דקות
+Deadline        = havdalah + 60 דקות (מעוגל לחצי שעה)
+Kickoff         = deadline - 15 דקות
+```
+
+---
+
+### שלב 6: עדכון ממשק ניהול המשחקים
+
+עדכון `src/components/admin/GameManagement.tsx`:
+
+```text
+┌─────────────────────────────────────────┐
+│  ניהול משחקים                           │
+├─────────────────────────────────────────┤
+│                                         │
+│  [צור משחק ידני לבדיקה]                 │
+│                                         │
+│  [צור משחק אוטומטי (לפי זמני שבת)]      │
+│                                         │
+├─────────────────────────────────────────┤
+│  משחקים קיימים                          │
+├─────────────────────────────────────────┤
+│  ┌─────────────────────────────────────┐│
+│  │ שבת 08/02 │ 18:45 │ פתוח │ [אוטו]  ││
+│  │ 15/15 שחקנים  Wave2: פתוח          ││
+│  │ [ערוך] [מחק]                       ││
+│  └─────────────────────────────────────┘│
+│  ┌─────────────────────────────────────┐│
+│  │ שבת 15/02 │ 20:00 │ מתוכנן │ [בדיקה]││
+│  │ 0/20 שחקנים (משחק בדיקה)           ││
+│  │ [ערוך] [מחק]                       ││
+│  └─────────────────────────────────────┘│
+└─────────────────────────────────────────┘
+
+[אוטו] = משחק אוטומטי (לפי זמני שבת)
+[בדיקה] = משחק בדיקה (הגדרות ידניות)
+```
+
+---
+
+### שלב 7: עדכון GameRegistration
+
+עדכון `src/components/game/GameRegistration.tsx`:
+- שימוש ב-`max_players` מבסיס הנתונים במקום קבוע
+- הצגת זמני פתיחת הרשמה
+- לוגיקת `canRegister()` מעודכנת לפי הזמנים מהמשחק
+
+---
+
+### סיכום קבצים
+
+| קובץ | פעולה |
 |------|-------|
-| `QrScanner.tsx` | עדכון `openScanner` לבקש הרשאה לפני פתיחת הסורק |
-| `QrScanner.tsx` | הוספת מצב `requesting_location` |
-| `QrScanner.tsx` | הצגת הודעה ברורה כשהמשתמש דוחה הרשאת מיקום |
+| `src/lib/database.types.ts` | עדכון טיפוסים |
+| `src/lib/hebcal.ts` | **חדש** - שילוב Hebcal API |
+| `src/lib/autoGameCreation.ts` | **חדש** - יצירה אוטומטית |
+| `src/components/admin/CreateGameForm.tsx` | **חדש** - טופס יצירה ידנית |
+| `src/components/admin/GameManagement.tsx` | עדכון ממשק |
+| `src/components/game/GameRegistration.tsx` | תמיכה ב-max_players דינמי |
+
+---
+
+### תזמון יצירת משחקים
+
+```text
+יום ראשון בבוקר
+        │
+        ▼
+  יצירת משחק אוטומטי לשבת הקרובה
+        │
+        ▼
+  יום שישי 12:00 ──► Wave 1 נפתח (תושבים)
+        │
+        ▼
+  הדלקת נרות - 60 דקות ──► Wave 2 נפתח (כולם)
+        │
+        ▼
+  הבדלה + 60 דקות ──► דד-ליין (מעוגל ל-:00/:30)
+        │
+        ▼
+  דד-ליין - 15 דקות ──► Kickoff
+```
 
