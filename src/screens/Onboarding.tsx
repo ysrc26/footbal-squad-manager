@@ -1,5 +1,7 @@
+"use client";
+
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useRouter } from 'next/navigation';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -43,18 +45,18 @@ export default function Onboarding() {
   const [step, setStep] = useState<'phone' | 'otp'>('phone');
   const [loading, setLoading] = useState(false);
   const { user, profile, loading: authLoading, refreshProfile } = useAuth();
-  const navigate = useNavigate();
+  const router = useRouter();
 
   useEffect(() => {
     if (authLoading) return;
     if (!user) {
-      navigate('/login', { replace: true });
+      router.replace('/login');
       return;
     }
     if (profile?.phone_number) {
-      navigate('/', { replace: true });
+      router.replace('/');
     }
-  }, [authLoading, user, profile?.phone_number, navigate]);
+  }, [authLoading, user, profile?.phone_number, router]);
 
   const phoneValidation = useMemo(() => validatePhoneNumber(phone), [phone]);
   const showPhoneError = phone.length > 0 && phoneValidation.error;
@@ -65,7 +67,6 @@ export default function Onboarding() {
 
     setLoading(true);
     const formattedPhone = formatToInternational(phone);
-    console.log('SUPABASE_URL', import.meta.env.VITE_SUPABASE_URL);
     const { error } = await supabase.auth.updateUser({
       phone: formattedPhone,
     });
@@ -138,7 +139,7 @@ export default function Onboarding() {
 
     await refreshProfile();
     toast.success('מספר הטלפון אומת בהצלחה');
-    navigate('/', { replace: true });
+    router.replace('/');
     setLoading(false);
   };
 

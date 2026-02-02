@@ -1,5 +1,8 @@
+"use client";
+
 import { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -13,7 +16,7 @@ import { GameManagement } from '@/components/admin/GameManagement';
 type AdminView = 'menu' | 'users' | 'settings' | 'qr' | 'rules' | 'games';
 
 export default function Admin() {
-  const navigate = useNavigate();
+  const router = useRouter();
   const { isAdmin } = useAuth();
   const [currentView, setCurrentView] = useState<AdminView>('menu');
 
@@ -57,7 +60,7 @@ export default function Admin() {
 
   const handleBack = () => {
     if (currentView === 'menu') {
-      navigate(-1);
+      router.back();
     } else {
       setCurrentView('menu');
     }
@@ -148,20 +151,20 @@ export default function Admin() {
       {/* Bottom Navigation */}
       <nav className="fixed bottom-0 left-0 right-0 glass border-t border-border/50 backdrop-blur-xl">
         <div className="container flex justify-around py-3">
-          <Link to="/" className="flex flex-col items-center gap-1 text-muted-foreground hover:text-primary transition-colors">
+          <Link href="/" className="flex flex-col items-center gap-1 text-muted-foreground hover:text-primary transition-colors">
             <Home className="h-6 w-6" />
             <span className="text-xs">ראשי</span>
           </Link>
-          <Link to="/profile" className="flex flex-col items-center gap-1 text-muted-foreground hover:text-primary transition-colors">
+          <Link href="/profile" className="flex flex-col items-center gap-1 text-muted-foreground hover:text-primary transition-colors">
             <User className="h-6 w-6" />
             <span className="text-xs">פרופיל</span>
           </Link>
-          <Link to="/rules" className="flex flex-col items-center gap-1 text-muted-foreground hover:text-primary transition-colors">
+          <Link href="/rules" className="flex flex-col items-center gap-1 text-muted-foreground hover:text-primary transition-colors">
             <FileText className="h-6 w-6" />
             <span className="text-xs">חוקים</span>
           </Link>
           {isAdmin && (
-            <Link to="/admin" className="flex flex-col items-center gap-1 text-primary">
+            <Link href="/admin" className="flex flex-col items-center gap-1 text-primary">
               <Settings className="h-6 w-6" />
               <span className="text-xs">ניהול</span>
             </Link>
