@@ -35,36 +35,6 @@ export function GameRegistration() {
   const maxPlayers = currentGame?.max_players ?? DEFAULT_MAX_PLAYERS;
   const maxStandby = currentGame?.max_standby ?? DEFAULT_MAX_STANDBY;
 
-  useEffect(() => {
-    fetchCurrentGame();
-  }, []);
-
-  useEffect(() => {
-    if (currentGame) {
-      fetchRegistrations();
-      // Subscribe to real-time updates
-      const channel = supabase
-        .channel('registrations-changes')
-        .on(
-          'postgres_changes',
-          {
-            event: '*',
-            schema: 'public',
-            table: 'registrations',
-            filter: `game_id=eq.${currentGame.id}`,
-          },
-          () => {
-            fetchRegistrations();
-          }
-        )
-        .subscribe();
-
-      return () => {
-        supabase.removeChannel(channel);
-      };
-    }
-  }, [currentGame, fetchRegistrations]);
-
   const fetchCurrentGame = async () => {
     try {
       const today = new Date().toISOString().split('T')[0];
@@ -167,6 +137,36 @@ export function GameRegistration() {
       console.error('Error fetching registrations:', error);
     }
   }, [currentGame, user, maxPlayers]);
+
+  useEffect(() => {
+    fetchCurrentGame();
+  }, []);
+
+  useEffect(() => {
+    if (currentGame) {
+      fetchRegistrations();
+      // Subscribe to real-time updates
+      const channel = supabase
+        .channel('registrations-changes')
+        .on(
+          'postgres_changes',
+          {
+            event: '*',
+            schema: 'public',
+            table: 'registrations',
+            filter: `game_id=eq.${currentGame.id}`,
+          },
+          () => {
+            fetchRegistrations();
+          }
+        )
+        .subscribe();
+
+      return () => {
+        supabase.removeChannel(channel);
+      };
+    }
+  }, [currentGame, fetchRegistrations]);
 
   const canRegister = () => {
     if (!currentGame) return false;
