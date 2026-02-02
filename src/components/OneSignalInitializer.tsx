@@ -4,6 +4,7 @@ import { useEffect, useRef } from "react";
 import OneSignal from "react-onesignal";
 import { supabase } from "@/integrations/supabase/client";
 import { initOneSignal } from "@/lib/onesignal";
+import { toast } from "sonner";
 
 interface OneSignalInitializerProps {
   userId?: string | null;
@@ -14,6 +15,27 @@ export default function OneSignalInitializer({ userId }: OneSignalInitializerPro
 
   useEffect(() => {
     let isActive = true;
+
+    const handleForegroundNotification = (event: any) => {
+      event.preventDefault();
+
+      const title =
+        event?.notification?.title ??
+        event?.notification?.headings?.en ??
+        "Notification";
+      const body =
+        event?.notification?.body ??
+        event?.notification?.contents?.en ??
+        "";
+
+      toast(title, {
+        description: body,
+        action: {
+          label: "View",
+          onClick: () => console.log("Clicked"),
+        },
+      });
+    };
 
     const saveSubscriptionId = async (subscriptionId: string) => {
       if (!userId) {
@@ -50,6 +72,11 @@ export default function OneSignalInitializer({ userId }: OneSignalInitializerPro
           return;
         }
 
+        OneSignal.Notifications.addEventListener(
+          "foregroundWillDisplay",
+          handleForegroundNotification,
+        );
+
         if (!OneSignal.Notifications.permission) {
           await OneSignal.Slidedown.promptPush();
         }
@@ -75,6 +102,10 @@ export default function OneSignalInitializer({ userId }: OneSignalInitializerPro
       if (userId) {
         OneSignal.User.PushSubscription.removeEventListener?.("change", handleSubscriptionChange);
       }
+      OneSignal.Notifications.removeEventListener?.(
+        "foregroundWillDisplay",
+        handleForegroundNotification,
+      );
     };
   }, [userId]);
 
