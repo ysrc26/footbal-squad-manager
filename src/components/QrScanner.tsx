@@ -224,7 +224,7 @@ export function QrScanner({ gameId, onCheckInSuccess }: QrScannerProps) {
         ) : (
           <>
             <QrCode className="h-6 w-6" />
-            סרוק QR לצ'ק-אין
+            סרוק QR לצ&apos;ק-אין
           </>
         )}
       </Button>
@@ -235,7 +235,7 @@ export function QrScanner({ gameId, onCheckInSuccess }: QrScannerProps) {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 justify-center">
               <QrCode className="h-5 w-5 text-primary" />
-              סריקת QR לצ'ק-אין
+              סריקת QR לצ&apos;ק-אין
             </DialogTitle>
             <DialogDescription className="text-center">
               כוון את המצלמה לקוד ה-QR במגרש
@@ -284,7 +284,7 @@ export function QrScanner({ gameId, onCheckInSuccess }: QrScannerProps) {
                   <CheckCircle2 className="h-12 w-12 text-green-500" />
                 </div>
                 <div className="text-center">
-                  <p className="font-bold text-xl text-green-500">צ'ק-אין בוצע!</p>
+                  <p className="font-bold text-xl text-green-500">צ&apos;ק-אין בוצע!</p>
                   <p className="text-sm text-muted-foreground mt-2">
                     הנוכחות שלך נרשמה בהצלחה
                   </p>

@@ -166,7 +166,7 @@ export function GameRegistration() {
     } catch (error: any) {
       console.error('Error fetching registrations:', error);
     }
-  }, [currentGame, user]);
+  }, [currentGame, user, maxPlayers]);
 
   const canRegister = () => {
     if (!currentGame) return false;
