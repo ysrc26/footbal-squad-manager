@@ -2,111 +2,74 @@
 
 import { useEffect, useRef } from "react";
 import OneSignal from "react-onesignal";
-import { supabase } from "@/integrations/supabase/client";
-import { initOneSignal } from "@/lib/onesignal";
 import { toast } from "sonner";
 
-interface OneSignalInitializerProps {
-  userId?: string | null;
-}
-
-export default function OneSignalInitializer({ userId }: OneSignalInitializerProps) {
-  const lastSavedIdRef = useRef<string | null>(null);
+export default function OneSignalInitializer({ userId }: { userId?: string }) {
+  const initializedRef = useRef(false);
 
   useEffect(() => {
-    let isActive = true;
-
-    const handleForegroundNotification = (event: any) => {
-      event.preventDefault();
-
-      const title =
-        event?.notification?.title ??
-        event?.notification?.headings?.en ??
-        "Notification";
-      const body =
-        event?.notification?.body ??
-        event?.notification?.contents?.en ??
-        "";
-
-      toast(title, {
-        description: body,
-        action: {
-          label: "View",
-          onClick: () => console.log("Clicked"),
-        },
-      });
-    };
-
-    const saveSubscriptionId = async (subscriptionId: string) => {
-      if (!userId) {
-        return;
-      }
-
-      if (lastSavedIdRef.current === subscriptionId) {
-        return;
-      }
-
-      await supabase
-        .from("profiles")
-        .update({ onesignal_id: subscriptionId })
-        .eq("id", userId);
-
-      lastSavedIdRef.current = subscriptionId;
-    };
-
-    const handleSubscriptionChange = async () => {
-      if (!isActive || !userId) {
-        return;
-      }
-
-      const subscriptionId = OneSignal.User.PushSubscription.id;
-      if (subscriptionId) {
-        await saveSubscriptionId(subscriptionId);
-      }
-    };
+    if (typeof window === "undefined") {
+      return;
+    }
 
     const initialize = async () => {
+      if (initializedRef.current) {
+        console.log("[OneSignal] init skipped (already initialized)");
+        return;
+      }
+
+      console.log("[OneSignal] init start");
+
       try {
-        await initOneSignal();
-        if (!isActive) {
-          return;
-        }
+        const appId =
+          process.env.NEXT_PUBLIC_ONESIGNAL_APP_ID ??
+          "76992db9-49f0-4ad6-9d56-a04be4578212";
+        const safariWebId = process.env.NEXT_PUBLIC_SAFARI_WEB_ID;
+
+        await OneSignal.init({
+          appId,
+          safari_web_id: safariWebId,
+          allowLocalhostAsSecureOrigin: true,
+          serviceWorkerPath: "/OneSignalSDKWorker.js",
+        });
+
+        initializedRef.current = true;
+        console.log("[OneSignal] init success");
 
         OneSignal.Notifications.addEventListener(
           "foregroundWillDisplay",
-          handleForegroundNotification,
+          (event) => {
+            console.log("[OneSignal] foreground notification received", event);
+            event.preventDefault();
+            const notif = event.getNotification();
+            toast(notif.title || "הודעה חדשה", {
+              description: notif.body,
+              action: {
+                label: "פתח",
+                onClick: () => console.log("[OneSignal] Notification clicked"),
+              },
+            });
+          },
         );
-
-        if (!OneSignal.Notifications.permission) {
-          await OneSignal.Slidedown.promptPush();
-        }
-
-        if (userId) {
-          await OneSignal.login(userId);
-          const subscriptionId = OneSignal.User.PushSubscription.id;
-          if (subscriptionId) {
-            await saveSubscriptionId(subscriptionId);
-          }
-
-          OneSignal.User.PushSubscription.addEventListener("change", handleSubscriptionChange);
-        }
       } catch (error) {
-        console.error("OneSignal init failed", error);
+        console.error("[OneSignal] init failed", error);
       }
     };
 
     initialize();
+  }, []);
 
-    return () => {
-      isActive = false;
-      if (userId) {
-        OneSignal.User.PushSubscription.removeEventListener?.("change", handleSubscriptionChange);
-      }
-      OneSignal.Notifications.removeEventListener?.(
-        "foregroundWillDisplay",
-        handleForegroundNotification,
-      );
-    };
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    if (!userId) {
+      return;
+    }
+
+    console.log("[OneSignal] ensuring login for", userId);
+    OneSignal.login(userId);
   }, [userId]);
 
   return null;
