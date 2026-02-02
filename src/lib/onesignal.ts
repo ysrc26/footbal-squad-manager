@@ -12,12 +12,19 @@ const oneSignalConfig = {
 let initPromise: Promise<void> | null = null;
 
 export const initOneSignal = async () => {
+  if (typeof window === "undefined") {
+    return;
+  }
+
   if (!initPromise) {
     if (!oneSignalConfig.appId) {
       throw new Error("Missing NEXT_PUBLIC_ONESIGNAL_APP_ID");
     }
 
     initPromise = OneSignal.init(oneSignalConfig).catch((error) => {
+      if (error instanceof Error && error.message.includes("already initialized")) {
+        return;
+      }
       initPromise = null;
       throw error;
     });

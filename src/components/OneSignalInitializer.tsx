@@ -5,11 +5,13 @@ import { useEffect, useRef } from "react";
 import OneSignal from "react-onesignal";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
+import { initOneSignal } from "@/lib/onesignal";
 
 export default function OneSignalInitializer({ userId }: { userId?: string }) {
   const initializedRef = useRef(false);
   const lastSavedIdRef = useRef<string | null>(null);
   const initPromiseRef = useRef<Promise<void> | null>(null);
+  const foregroundListenerRef = useRef(false);
 
   // 1. אתחול חד פעמי של OneSignal
   useEffect(() => {
@@ -20,59 +22,37 @@ export default function OneSignalInitializer({ userId }: { userId?: string }) {
 
       if (!initPromiseRef.current) {
         console.log("[OneSignal] Init start");
-        const existingPromise = (window as Window & {
-          __oneSignalInitPromise?: Promise<void>;
-          __oneSignalInitDone?: boolean;
-        }).__oneSignalInitPromise;
-
-        if (existingPromise) {
-          initPromiseRef.current = existingPromise;
-        } else {
-          initPromiseRef.current = (async () => {
-          const appId = process.env.NEXT_PUBLIC_ONESIGNAL_APP_ID;
-          const safariWebId = process.env.NEXT_PUBLIC_SAFARI_WEB_ID;
-
-          if (!appId) {
-            console.error("[OneSignal] Missing NEXT_PUBLIC_ONESIGNAL_APP_ID");
-            return;
-          }
-
-          await OneSignal.init({
-            appId,
-            safari_web_id: safariWebId,
-            allowLocalhostAsSecureOrigin: true,
-            serviceWorkerPath: "/OneSignalSDKWorker.js",
-            serviceWorkerUpdaterPath: "/OneSignalSDKUpdaterWorker.js",
-            serviceWorkerParam: { scope: "/" },
-          });
-
-          initializedRef.current = true;
-          (window as Window & { __oneSignalInitDone?: boolean }).__oneSignalInitDone = true;
-          console.log("[OneSignal] Init success");
-
-          // מאזין להודעות כשהאפליקציה פתוחה (Foreground)
-          OneSignal.Notifications.addEventListener("foregroundWillDisplay", (event) => {
-            console.log("[OneSignal] Foreground notification received", event);
-            event.preventDefault();
-            const notif = event.notification;
-            toast(notif.title || "הודעה חדשה", {
-              description: notif.body,
-              action: {
-                label: "פתח",
-                onClick: () => console.log("[OneSignal] Notification clicked"),
-              },
-            });
-          });
-          })().catch((error) => {
-            initPromiseRef.current = null;
-            (window as Window & { __oneSignalInitPromise?: Promise<void> }).__oneSignalInitPromise = undefined;
-            console.error("[OneSignal] Init failed", error);
-          });
-
-          (window as Window & { __oneSignalInitPromise?: Promise<void> }).__oneSignalInitPromise = initPromiseRef.current;
-        }
+        initPromiseRef.current = initOneSignal();
       }
-      await initPromiseRef.current;
+      try {
+        await initPromiseRef.current;
+      } catch (error) {
+        initPromiseRef.current = null;
+        console.error("[OneSignal] Init failed", error);
+        return;
+      }
+
+      if (!initializedRef.current) {
+        initializedRef.current = true;
+        console.log("[OneSignal] Init success");
+      }
+
+      if (!foregroundListenerRef.current) {
+        foregroundListenerRef.current = true;
+        // מאזין להודעות כשהאפליקציה פתוחה (Foreground)
+        OneSignal.Notifications.addEventListener("foregroundWillDisplay", (event) => {
+          console.log("[OneSignal] Foreground notification received", event);
+          event.preventDefault();
+          const notif = event.notification;
+          toast(notif.title || "הודעה חדשה", {
+            description: notif.body,
+            action: {
+              label: "פתח",
+              onClick: () => console.log("[OneSignal] Notification clicked"),
+            },
+          });
+        });
+      }
     };
 
     initialize();
@@ -139,12 +119,6 @@ export default function OneSignalInitializer({ userId }: { userId?: string }) {
 
         console.log("[OneSignal] Logging in user:", userId);
         await OneSignal.login(userId);
-
-        // בקשת הרשאה אם עדיין אין (חשוב למשתמשים חדשים!)
-        if (!OneSignal.Notifications.permission) {
-             console.log("[OneSignal] Requesting permission...");
-             await OneSignal.Notifications.requestPermission();
-        }
 
         // ניסיון לשמור את ה-ID הקיים
         const subscriptionId = OneSignal.User.PushSubscription.id;

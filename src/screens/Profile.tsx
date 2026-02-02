@@ -13,6 +13,7 @@ import { Loader2, ArrowRight, User, Phone, Home, Camera } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import OneSignal from 'react-onesignal';
+import { initOneSignal } from '@/lib/onesignal';
 
 export default function Profile() {
   const { user, profile, refreshProfile } = useAuth();
@@ -126,13 +127,13 @@ export default function Profile() {
   };
 
   const waitForOneSignalReady = async () => {
-    for (let i = 0; i < 50; i += 1) {
-      if (OneSignal?.Notifications && OneSignal?.User?.PushSubscription) {
-        return true;
-      }
-      await new Promise((resolve) => setTimeout(resolve, 100));
+    try {
+      await initOneSignal();
+      return Boolean(OneSignal?.Notifications && OneSignal?.User?.PushSubscription);
+    } catch (error) {
+      console.error(error);
+      return false;
     }
-    return false;
   };
 
   const handleEnableNotifications = async () => {
@@ -149,14 +150,29 @@ export default function Profile() {
         return;
       }
 
-      await OneSignal.Notifications.requestPermission();
+      const permission = await OneSignal.Notifications.requestPermission();
+      if (permission !== 'granted') {
+        toast.error('ההרשאה נדחתה. אפשר להפעיל בהגדרות הדפדפן');
+        return;
+      }
       if (user?.id) {
         await OneSignal.login(user.id);
       }
-      await new Promise((resolve) => setTimeout(resolve, 300));
-      const subscriptionId = OneSignal.User.PushSubscription?.id;
-      setNotificationsEnabled(Boolean(subscriptionId));
-      toast.success('ההתראות הופעלו בהצלחה');
+      let enabled = false;
+      for (let i = 0; i < 10; i += 1) {
+        const subscriptionId = OneSignal.User.PushSubscription?.id;
+        if (subscriptionId) {
+          enabled = true;
+          break;
+        }
+        await new Promise((resolve) => setTimeout(resolve, 300));
+      }
+      setNotificationsEnabled(enabled);
+      if (enabled) {
+        toast.success('ההתראות הופעלו בהצלחה');
+      } else {
+        toast.error('לא הצלחנו לרשום אותך להתראות, נסה שוב בעוד רגע');
+      }
     } catch (error) {
       console.error(error);
       toast.error('שגיאה בהפעלת התראות');
