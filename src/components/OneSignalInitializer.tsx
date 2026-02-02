@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import OneSignal from "react-onesignal";
 import { supabase } from "@/integrations/supabase/client";
 import { initOneSignal } from "@/lib/onesignal";
@@ -10,6 +10,8 @@ interface OneSignalInitializerProps {
 }
 
 export default function OneSignalInitializer({ userId }: OneSignalInitializerProps) {
+  const lastSavedIdRef = useRef<string | null>(null);
+
   useEffect(() => {
     let isActive = true;
 
@@ -18,10 +20,16 @@ export default function OneSignalInitializer({ userId }: OneSignalInitializerPro
         return;
       }
 
+      if (lastSavedIdRef.current === subscriptionId) {
+        return;
+      }
+
       await supabase
         .from("profiles")
         .update({ onesignal_id: subscriptionId })
         .eq("id", userId);
+
+      lastSavedIdRef.current = subscriptionId;
     };
 
     const handleSubscriptionChange = async () => {
