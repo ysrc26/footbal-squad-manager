@@ -4,8 +4,7 @@ const oneSignalConfig = {
   appId: process.env.NEXT_PUBLIC_ONESIGNAL_APP_ID || "",
   safari_web_id: process.env.NEXT_PUBLIC_SAFARI_WEB_ID,
   allowLocalhostAsSecureOrigin: true,
-  serviceWorkerPath: "/OneSignalSDKWorker.js",
-  serviceWorkerUpdaterPath: "/OneSignalSDKUpdaterWorker.js",
+  serviceWorkerPath: "/sw.js",
   serviceWorkerParam: { scope: "/" },
 };
 
@@ -22,7 +21,8 @@ const ensureServiceWorker = async () => {
       const scriptUrl = registration.active?.scriptURL || "";
       const isOneSignalWorker =
         scriptUrl.includes("OneSignalSDKWorker.js") ||
-        scriptUrl.includes("OneSignalSDK.sw.js");
+        scriptUrl.includes("OneSignalSDK.sw.js") ||
+        scriptUrl.endsWith("/sw.js");
 
       if (!isOneSignalWorker) {
         await registration.unregister();
@@ -33,10 +33,9 @@ const ensureServiceWorker = async () => {
     const hasActive = Boolean(registration?.active);
 
     if (!registration || !hasActive) {
-      registration = await navigator.serviceWorker.register(
-        "/OneSignalSDKWorker.js",
-        { scope: "/" },
-      );
+      registration = await navigator.serviceWorker.register("/sw.js", {
+        scope: "/",
+      });
     }
 
     if (registration) {
