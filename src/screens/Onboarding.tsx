@@ -10,6 +10,8 @@ import { toast } from 'sonner';
 import { Loader2, Phone } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
+import { initOneSignal } from "@/lib/onesignal";
+import OneSignal from "react-onesignal";
 
 interface PhoneValidation {
   isValid: boolean;
@@ -40,129 +42,107 @@ const formatToInternational = (phone: string): string => {
 };
 
 export default function Onboarding() {
+  const { user, refreshProfile } = useAuth();
+  const router = useRouter();
+  const [step, setStep] = useState<'phone' | 'otp'>('phone');
   const [phone, setPhone] = useState('');
   const [otp, setOtp] = useState('');
-  const [step, setStep] = useState<'phone' | 'otp'>('phone');
   const [loading, setLoading] = useState(false);
-  const { user, profile, loading: authLoading, refreshProfile } = useAuth();
-  const router = useRouter();
-
-  useEffect(() => {
-    if (authLoading) return;
-    if (!user) {
-      router.replace('/login');
-      return;
-    }
-    if (profile?.phone_number) {
-      router.replace('/');
-    }
-  }, [authLoading, user, profile?.phone_number, router]);
 
   const phoneValidation = useMemo(() => validatePhoneNumber(phone), [phone]);
-  const showPhoneError = phone.length > 0 && phoneValidation.error;
+
+  useEffect(() => {
+    if (user?.user_metadata?.phone_number) {
+      // אם למשתמש כבר יש טלפון מאומת, נדלג
+      router.replace('/dashboard');
+    }
+  }, [user, router]);
 
   const handleSendOtp = async (e: FormEvent) => {
     e.preventDefault();
     if (!phoneValidation.isValid) return;
 
     setLoading(true);
-    const formattedPhone = formatToInternational(phone);
-    const { error } = await supabase.auth.updateUser({
-      phone: formattedPhone,
-    });
+    try {
+      const { error } = await supabase.auth.signInWithOtp({
+        phone: formatToInternational(phone),
+      });
 
-    if (error) {
-      console.error('updateUser error:', {
-        message: error.message,
-        name: (error as any).name,
-        status: (error as any).status,
-        code: (error as any).code,
-      });
-      toast.error('שגיאה בשליחת קוד האימות', {
-        description: `${error.message}${(error as any).code ? ` (${(error as any).code})` : ''}`,
-      });
+      if (error) throw error;
+
+      toast.success('קוד אימות נשלח לטלפון שלך');
+      setStep('otp');
+    } catch (error: any) {
+      console.error(error);
+      toast.error('שגיאה בשליחת הקוד: ' + error.message);
+    } finally {
       setLoading(false);
-      return;
     }
-
-    toast.success('קוד אימות נשלח!', {
-      description: 'בדוק את הודעות ה-SMS שלך',
-    });
-    setStep('otp');
-    setLoading(false);
   };
 
   const handleVerifyOtp = async (e: FormEvent) => {
     e.preventDefault();
-    if (!user) return;
-
+    if (otp.length !== 6) return;
+  
     setLoading(true);
-    const formattedPhone = formatToInternational(phone);
-    const { error } = await supabase.auth.verifyOtp({
-      phone: formattedPhone,
-      token: otp,
-      type: 'phone_change',
-    });
-
-    if (error) {
-      console.error('verifyOtp error:', {
-        message: error.message,
-        name: (error as any).name,
-        status: (error as any).status,
-        code: (error as any).code,
+    try {
+      const { error } = await supabase.auth.verifyOtp({
+        phone: formatToInternational(phone),
+        token: otp,
+        type: 'sms',
       });
-      toast.error('קוד אימות שגוי', {
-        description: `${error.message}${(error as any).code ? ` (${(error as any).code})` : ''}`,
-      });
+  
+      if (error) throw error;
+  
+      toast.success('האימות עבר בהצלחה!');
+      await refreshProfile();
+  
+      // --- כאן הוספנו את הרישום האוטומטי להתראות (Piggyback) ---
+      try {
+        console.log("Attempting auto-enrollment for Push Notifications...");
+        
+        // 1. וודא ש-OneSignal מאותחל
+        await initOneSignal();
+        
+        // 2. בדוק תמיכה
+        if (OneSignal.Notifications.isPushSupported()) {
+            
+            // 3. בקש אישור (זה יעבוד כי אנחנו בתוך אירוע לחיצה של המשתמש!)
+            // אנחנו משתמשים ב-await כדי שהבועה תקפוץ לפני המעבר עמוד
+            await OneSignal.Notifications.requestPermission();
+            
+            // 4. חבר את המשתמש הנוכחי
+            const currentUser = (await supabase.auth.getUser()).data.user;
+            if (currentUser?.id) {
+                console.log("Logging in user to OneSignal:", currentUser.id);
+                await OneSignal.login(currentUser.id);
+            }
+        }
+      } catch (pushError) {
+        // אנחנו לא רוצים לתקוע את ההתחברות אם ההתראות נכשלו, אז רק מדפיסים שגיאה
+        console.error("Failed to auto-enroll push notifications:", pushError);
+      }
+      // -----------------------------------------------------------
+  
+      router.replace('/dashboard');
+    } catch (error: any) {
+      console.error(error);
+      toast.error('קוד שגוי או פג תוקף');
+    } finally {
       setLoading(false);
-      return;
     }
-
-    const { error: updateError } = await supabase
-      .from('profiles')
-      .update({ phone_number: formattedPhone })
-      .eq('id', user.id);
-
-    if (updateError) {
-      console.error('profiles update error:', {
-        message: updateError.message,
-        code: updateError.code,
-        details: updateError.details,
-        hint: updateError.hint,
-      });
-      toast.error('שגיאה בעדכון מספר הטלפון', {
-        description: `${updateError.message}${updateError.code ? ` (${updateError.code})` : ''}`,
-      });
-      setLoading(false);
-      return;
-    }
-
-    await refreshProfile();
-    toast.success('מספר הטלפון אומת בהצלחה');
-    router.replace('/');
-    setLoading(false);
   };
 
-  if (authLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center gradient-dark">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-      </div>
-    );
-  }
-
   return (
-    <div className="min-h-screen flex items-center justify-center p-4 gradient-dark" dir="rtl">
-      <Card className="w-full max-w-md glass neon-border animate-fade-in">
+    <div className="min-h-screen flex items-center justify-center p-4 gradient-dark">
+      <Card className="w-full max-w-md glass-card border-border/50">
         <CardHeader className="text-center space-y-2">
-          <div className="mx-auto w-14 h-14 rounded-full bg-primary/20 flex items-center justify-center neon-glow">
+          <div className="mx-auto bg-primary/10 w-12 h-12 rounded-full flex items-center justify-center mb-2">
             <Phone className="w-6 h-6 text-primary" />
           </div>
-          <CardTitle className="text-2xl font-bold neon-text">אימות טלפון</CardTitle>
-          <CardDescription className="text-muted-foreground">
-            {step === 'phone'
-              ? 'כדי להמשיך, נא להזין מספר טלפון ישראלי'
-              : 'הזן את קוד האימות שנשלח אליך'}
+          <CardTitle className="text-2xl font-bold text-white">אימות מספר טלפון</CardTitle>
+          <CardDescription className="text-gray-400">
+            כדי להשתמש באפליקציה, עלינו לאמת את מספר הטלפון שלך
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -173,17 +153,14 @@ export default function Onboarding() {
                 <Input
                   id="phone"
                   type="tel"
-                  placeholder="0501234567"
+                  placeholder="050-0000000"
                   value={phone}
                   onChange={(e) => setPhone(e.target.value)}
-                  className={`text-lg h-12 ${showPhoneError ? 'border-destructive focus-visible:ring-destructive' : ''}`}
+                  className={`text-right h-12 ${!phoneValidation.isValid && phone.length > 0 ? 'border-red-500 focus-visible:ring-red-500' : ''}`}
                   dir="ltr"
-                  required
                 />
-                {showPhoneError && (
-                  <p className="text-sm text-destructive text-right">
-                    {phoneValidation.error}
-                  </p>
+                {!phoneValidation.isValid && phone.length > 0 && (
+                  <p className="text-xs text-red-400">{phoneValidation.error}</p>
                 )}
               </div>
               <Button

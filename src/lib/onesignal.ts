@@ -4,7 +4,7 @@ const oneSignalConfig = {
   appId: process.env.NEXT_PUBLIC_ONESIGNAL_APP_ID || "",
   safari_web_id: process.env.NEXT_PUBLIC_SAFARI_WEB_ID,
   allowLocalhostAsSecureOrigin: true,
-  serviceWorkerPath: "/sw.js",
+  serviceWorkerPath: "/OneSignalSDKWorker.js",
   serviceWorkerParam: { scope: "/" },
 };
 

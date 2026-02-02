@@ -6,6 +6,8 @@ import { useAuth } from '@/contexts/AuthContext';
 import { Loader2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import OneSignalInitializer from '@/components/OneSignalInitializer';
+import NotificationsPrompt from '@/components/NotificationsPrompt';
 
 interface AuthWrapperProps {
   children: ReactNode;
@@ -92,5 +94,15 @@ export default function AuthWrapper({ children, requireAdmin = false }: AuthWrap
     );
   }
 
-  return content;
+  return (
+    <>
+      {/* 1. זה מה שמפעיל את הלוגיקה, את ה-Login ואת המאזינים */}
+      <OneSignalInitializer userId={user?.id} />
+      
+      {/* 2. זה הרכיב שיקפוץ רק אם המשתמש עדיין לא נרשם וצריך אישור ידני */}
+      <NotificationsPrompt />
+
+      {content}
+    </>
+  );
 }

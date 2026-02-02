@@ -8,7 +8,9 @@ const nextConfig = {
     register: true,
     skipWaiting: true,
     disable: process.env.NODE_ENV === "development",
-    swSrc: "src/sw.js",
+    workboxOptions: {
+      importScripts: ["https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.sw.js"],
+    },
   },
 };
 
