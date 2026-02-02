@@ -1,3 +1,5 @@
+"use client";
+
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -110,7 +112,7 @@ export function QrCodeGenerator() {
         <CardHeader className="text-center">
           <CardTitle className="flex items-center justify-center gap-2">
             <QrCode className="h-5 w-5 text-primary" />
-            קוד QR לצ'ק-אין
+            קוד QR לצ&apos;ק-אין
           </CardTitle>
           <CardDescription>
             הצג קוד זה לשחקנים במגרש לצורך אימות נוכחות

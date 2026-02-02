@@ -1,6 +1,7 @@
-// src/components/AuthWrapper.tsx
+"use client";
+
 import { useEffect, useState, type ReactNode } from 'react';
-import { Navigate } from 'react-router-dom';
+import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { Loader2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
@@ -14,6 +15,8 @@ interface AuthWrapperProps {
 export default function AuthWrapper({ children, requireAdmin = false }: AuthWrapperProps) {
   const { user, profile, isAdmin, loading, refreshProfile } = useAuth();
   const [checkingProfile, setCheckingProfile] = useState(false);
+  const [redirecting, setRedirecting] = useState(false);
+  const router = useRouter();
 
   useEffect(() => {
     // הוספנו תנאי: תריץ את זה רק אם אנחנו לא כבר בודקים
@@ -46,8 +49,32 @@ export default function AuthWrapper({ children, requireAdmin = false }: AuthWrap
     }
   }, [loading, user, profile, checkingProfile, refreshProfile]);
 
+  useEffect(() => {
+    if (loading || checkingProfile) return;
+
+    if (!user) {
+      setRedirecting(true);
+      router.replace('/login');
+      return;
+    }
+
+    if (!profile?.phone_number) {
+      setRedirecting(true);
+      router.replace('/onboarding');
+      return;
+    }
+
+    if (requireAdmin && !isAdmin) {
+      setRedirecting(true);
+      router.replace('/');
+      return;
+    }
+
+    setRedirecting(false);
+  }, [loading, checkingProfile, user, profile?.phone_number, requireAdmin, isAdmin, router]);
+
   // 1. קודם כל מטפלים בטעינה הכללית
-  if (loading || checkingProfile) {
+  if (loading || checkingProfile || redirecting) {
     return (
       <div className="min-h-screen flex items-center justify-center gradient-dark">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -55,12 +82,7 @@ export default function AuthWrapper({ children, requireAdmin = false }: AuthWrap
     );
   }
 
-  // 2. אם אין יוזר בכלל - זרוק ללוגין
-  if (!user) {
-    return <Navigate to="/login" replace />;
-  }
-
-  // 3. התיקון הקריטי: אם יש יוזר אבל הפרופיל עדיין לא נטען (למרות שסיימנו loading)
+  // 2. אם יש יוזר אבל הפרופיל עדיין לא נטען (למרות שסיימנו loading)
   // זה אומר שאנחנו בשלב ביניים - עדיף להציג טעינה מאשר לזרוק החוצה
   if (!profile) {
     return (
@@ -68,16 +90,6 @@ export default function AuthWrapper({ children, requireAdmin = false }: AuthWrap
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
       </div>
     );
-  }
-
-  // 4. עכשיו בטוח יש פרופיל, אפשר לבדוק טלפון
-  if (!profile.phone_number) {
-    return <Navigate to="/onboarding" replace />;
-  }
-
-  // 5. בדיקת אדמין אם צריך
-  if (requireAdmin && !isAdmin) {
-    return <Navigate to="/" replace />;
   }
 
   return <>{children}</>;

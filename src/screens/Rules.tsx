@@ -1,12 +1,14 @@
+"use client";
+
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useRouter } from 'next/navigation';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ArrowRight, FileText, Loader2 } from 'lucide-react';
 
 export default function Rules() {
-  const navigate = useNavigate();
+  const router = useRouter();
   const [rules, setRules] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -31,7 +33,7 @@ export default function Rules() {
       {/* Header */}
       <header className="sticky top-0 z-50 glass border-b border-border/50 backdrop-blur-xl">
         <div className="container flex items-center h-16 px-4">
-          <Button variant="ghost" size="icon" onClick={() => navigate(-1)}>
+          <Button variant="ghost" size="icon" onClick={() => router.back()}>
             <ArrowRight className="h-5 w-5" />
           </Button>
           <h1 className="text-xl font-bold mr-2">חוקי המשחק</h1>

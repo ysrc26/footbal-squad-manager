@@ -1,3 +1,5 @@
+"use client";
+
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Users, CheckCircle2, User } from 'lucide-react';
@@ -63,7 +65,7 @@ export function PlayerList({ title, players, maxPlayers, showPosition, emptyMess
                 {registration.check_in_status === 'checked_in' && (
                   <Badge className="bg-green-500/20 text-green-500 border-green-500/50 text-xs">
                     <CheckCircle2 className="h-3 w-3 ml-1" />
-                    צ'ק-אין
+                    צ&apos;ק-אין
                   </Badge>
                 )}
               </div>

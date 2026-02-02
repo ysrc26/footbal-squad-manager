@@ -1,4 +1,6 @@
-import { useState, useEffect, useRef } from 'react';
+"use client";
+
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -33,36 +35,6 @@ export function GameRegistration() {
   const maxPlayers = currentGame?.max_players ?? DEFAULT_MAX_PLAYERS;
   const maxStandby = currentGame?.max_standby ?? DEFAULT_MAX_STANDBY;
 
-  useEffect(() => {
-    fetchCurrentGame();
-  }, []);
-
-  useEffect(() => {
-    if (currentGame) {
-      fetchRegistrations();
-      // Subscribe to real-time updates
-      const channel = supabase
-        .channel('registrations-changes')
-        .on(
-          'postgres_changes',
-          {
-            event: '*',
-            schema: 'public',
-            table: 'registrations',
-            filter: `game_id=eq.${currentGame.id}`,
-          },
-          () => {
-            fetchRegistrations();
-          }
-        )
-        .subscribe();
-
-      return () => {
-        supabase.removeChannel(channel);
-      };
-    }
-  }, [currentGame?.id]);
-
   const fetchCurrentGame = async () => {
     try {
       const today = new Date().toISOString().split('T')[0];
@@ -84,7 +56,7 @@ export function GameRegistration() {
     }
   };
 
-  const fetchRegistrations = async () => {
+  const fetchRegistrations = useCallback(async () => {
     if (!currentGame || !user) return;
 
     try {
@@ -164,7 +136,37 @@ export function GameRegistration() {
     } catch (error: any) {
       console.error('Error fetching registrations:', error);
     }
-  };
+  }, [currentGame, user, maxPlayers]);
+
+  useEffect(() => {
+    fetchCurrentGame();
+  }, []);
+
+  useEffect(() => {
+    if (currentGame) {
+      fetchRegistrations();
+      // Subscribe to real-time updates
+      const channel = supabase
+        .channel('registrations-changes')
+        .on(
+          'postgres_changes',
+          {
+            event: '*',
+            schema: 'public',
+            table: 'registrations',
+            filter: `game_id=eq.${currentGame.id}`,
+          },
+          () => {
+            fetchRegistrations();
+          }
+        )
+        .subscribe();
+
+      return () => {
+        supabase.removeChannel(channel);
+      };
+    }
+  }, [currentGame, fetchRegistrations]);
 
   const canRegister = () => {
     if (!currentGame) return false;
@@ -511,7 +513,7 @@ export function GameRegistration() {
                   )}
                   {isCheckedIn && (
                     <Badge className="mt-1 bg-green-500/20 text-green-500 border-green-500/50">
-                      ✓ עשית צ'ק-אין
+                      ✓ עשית צ&apos;ק-אין
                     </Badge>
                   )}
                 </div>

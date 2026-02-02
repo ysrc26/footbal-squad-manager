@@ -1,3 +1,5 @@
+"use client";
+
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -167,7 +169,7 @@ export function AppSettings() {
             מיקום המגרש
           </CardTitle>
           <CardDescription>
-            הגדר את קואורדינטות המגרש לאימות צ'ק-אין (רדיוס 10 מטר)
+            הגדר את קואורדינטות המגרש לאימות צ&apos;ק-אין (רדיוס 10 מטר)
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
