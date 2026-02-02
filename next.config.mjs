@@ -6,12 +6,17 @@ const withPWA = withPWAInit({
   register: true,
   skipWaiting: true,
   disable: process.env.NODE_ENV === "development", // בטל ב-Dev כדי לא לשגע את הדפדפן
+  workboxOptions: {
+    importScripts: [
+      "https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.sw.js",
+    ],
+  },
 });
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
-  // הערה: אין צורך במפתח 'pwa' כאן בפנים, ההגדרות עברו למעלה
+  turbopack: {},
 };
 
 // 2. ייצוא הקונפיגורציה העטופה
