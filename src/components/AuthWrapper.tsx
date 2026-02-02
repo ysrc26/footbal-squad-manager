@@ -6,6 +6,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { Loader2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import OneSignalInitializer from '@/components/OneSignalInitializer';
 
 interface AuthWrapperProps {
   children: ReactNode;
@@ -17,6 +18,7 @@ export default function AuthWrapper({ children, requireAdmin = false }: AuthWrap
   const [checkingProfile, setCheckingProfile] = useState(false);
   const [redirecting, setRedirecting] = useState(false);
   const router = useRouter();
+  const oneSignalInitializer = <OneSignalInitializer userId={user?.id} />;
 
   useEffect(() => {
     // הוספנו תנאי: תריץ את זה רק אם אנחנו לא כבר בודקים
@@ -77,6 +79,7 @@ export default function AuthWrapper({ children, requireAdmin = false }: AuthWrap
   if (loading || checkingProfile || redirecting) {
     return (
       <div className="min-h-screen flex items-center justify-center gradient-dark">
+        {oneSignalInitializer}
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
       </div>
     );
@@ -87,10 +90,16 @@ export default function AuthWrapper({ children, requireAdmin = false }: AuthWrap
   if (!profile) {
     return (
       <div className="min-h-screen flex items-center justify-center gradient-dark">
+        {oneSignalInitializer}
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
       </div>
     );
   }
 
-  return <>{children}</>;
+  return (
+    <>
+      {oneSignalInitializer}
+      {children}
+    </>
+  );
 }

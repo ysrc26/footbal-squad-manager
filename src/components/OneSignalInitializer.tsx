@@ -2,11 +2,38 @@
 
 import { useEffect } from "react";
 import OneSignal from "react-onesignal";
+import { supabase } from "@/integrations/supabase/client";
 import { initOneSignal } from "@/lib/onesignal";
 
-export default function OneSignalInitializer() {
+interface OneSignalInitializerProps {
+  userId?: string | null;
+}
+
+export default function OneSignalInitializer({ userId }: OneSignalInitializerProps) {
   useEffect(() => {
     let isActive = true;
+
+    const saveSubscriptionId = async (subscriptionId: string) => {
+      if (!userId) {
+        return;
+      }
+
+      await supabase
+        .from("profiles")
+        .update({ onesignal_id: subscriptionId })
+        .eq("id", userId);
+    };
+
+    const handleSubscriptionChange = async () => {
+      if (!isActive || !userId) {
+        return;
+      }
+
+      const subscriptionId = OneSignal.User.PushSubscription.id;
+      if (subscriptionId) {
+        await saveSubscriptionId(subscriptionId);
+      }
+    };
 
     const initialize = async () => {
       try {
@@ -18,6 +45,16 @@ export default function OneSignalInitializer() {
         if (!OneSignal.Notifications.permission) {
           await OneSignal.Slidedown.promptPush();
         }
+
+        if (userId) {
+          await OneSignal.login(userId);
+          const subscriptionId = OneSignal.User.PushSubscription.id;
+          if (subscriptionId) {
+            await saveSubscriptionId(subscriptionId);
+          }
+
+          OneSignal.User.PushSubscription.addEventListener("change", handleSubscriptionChange);
+        }
       } catch (error) {
         console.error("OneSignal init failed", error);
       }
@@ -27,8 +64,11 @@ export default function OneSignalInitializer() {
 
     return () => {
       isActive = false;
+      if (userId) {
+        OneSignal.User.PushSubscription.removeEventListener?.("change", handleSubscriptionChange);
+      }
     };
-  }, []);
+  }, [userId]);
 
   return null;
 }
