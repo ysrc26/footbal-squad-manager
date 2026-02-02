@@ -1,3 +1,4 @@
+//  src/components/OneSignalInitializer.tsx
 "use client";
 
 import { useEffect, useRef } from "react";
@@ -10,24 +11,23 @@ export default function OneSignalInitializer({ userId }: { userId?: string }) {
   const lastSavedIdRef = useRef<string | null>(null);
   const initPromiseRef = useRef<Promise<void> | null>(null);
 
+  // 1. אתחול חד פעמי של OneSignal
   useEffect(() => {
-    if (typeof window === "undefined") {
-      return;
-    }
+    if (typeof window === "undefined") return;
 
     const initialize = async () => {
-      if (initializedRef.current) {
-        console.log("[OneSignal] init skipped (already initialized)");
-        return;
-      }
+      if (initializedRef.current) return;
 
       if (!initPromiseRef.current) {
-        console.log("[OneSignal] init start");
+        console.log("[OneSignal] Init start");
         initPromiseRef.current = (async () => {
-          const appId =
-            process.env.NEXT_PUBLIC_ONESIGNAL_APP_ID ??
-            "76992db9-49f0-4ad6-9d56-a04be4578212";
+          const appId = process.env.NEXT_PUBLIC_ONESIGNAL_APP_ID;
           const safariWebId = process.env.NEXT_PUBLIC_SAFARI_WEB_ID;
+
+          if (!appId) {
+            console.error("[OneSignal] Missing NEXT_PUBLIC_ONESIGNAL_APP_ID");
+            return;
+          }
 
           await OneSignal.init({
             appId,
@@ -37,68 +37,62 @@ export default function OneSignalInitializer({ userId }: { userId?: string }) {
           });
 
           initializedRef.current = true;
-          console.log("[OneSignal] init success");
+          console.log("[OneSignal] Init success");
 
-          OneSignal.Notifications.addEventListener(
-            "foregroundWillDisplay",
-            (event) => {
-              console.log("[OneSignal] foreground notification received", event);
-              event.preventDefault();
+          // מאזין להודעות כשהאפליקציה פתוחה (Foreground)
+          OneSignal.Notifications.addEventListener("foregroundWillDisplay", (event) => {
+            console.log("[OneSignal] Foreground notification received", event);
+            event.preventDefault();
             const notif = event.notification;
-              toast(notif.title || "הודעה חדשה", {
-                description: notif.body,
-                action: {
-                  label: "פתח",
-                  onClick: () => console.log("[OneSignal] Notification clicked"),
-                },
-              });
-            },
-          );
+            toast(notif.title || "הודעה חדשה", {
+              description: notif.body,
+              action: {
+                label: "פתח",
+                onClick: () => console.log("[OneSignal] Notification clicked"),
+              },
+            });
+          });
         })().catch((error) => {
           initPromiseRef.current = null;
-          console.error("[OneSignal] init failed", error);
-          throw error;
+          console.error("[OneSignal] Init failed", error);
         });
       }
-
       await initPromiseRef.current;
     };
 
     initialize();
   }, []);
 
+  // 2. טיפול בחיבור משתמש ורישום לדאטה-בייס
   useEffect(() => {
-    if (typeof window === "undefined") {
-      return;
-    }
+    if (typeof window === "undefined" || !userId) return;
 
-    if (!userId) {
-      return;
-    }
+    // תיקון קריטי: איפוס ה-ref כשהמשתמש מתחלף כדי להבטיח שמירה מחדש
+    lastSavedIdRef.current = null; 
 
     const saveSubscriptionId = async (subscriptionId: string) => {
+      // מניעת כתיבות כפולות לאותו סשן
       if (lastSavedIdRef.current === subscriptionId) {
         return;
       }
 
+      console.log(`[OneSignal] Saving subscription ID: ${subscriptionId} for user: ${userId}`);
+      
       const { error } = await supabase
         .from("profiles")
         .update({ onesignal_id: subscriptionId })
         .eq("id", userId);
 
       if (error) {
-        console.error("[OneSignal] failed to persist subscription id", error);
-        return;
+        console.error("[OneSignal] Failed to persist subscription ID", error);
+      } else {
+        lastSavedIdRef.current = subscriptionId;
+        console.log("[OneSignal] Successfully persisted subscription ID to DB");
       }
-
-      lastSavedIdRef.current = subscriptionId;
-      console.log("[OneSignal] persisted subscription id", subscriptionId);
     };
 
     const handleSubscriptionChange = (event: any) => {
-      const subscriptionId =
-        event?.current?.id ?? OneSignal.User.PushSubscription.id;
-
+      const subscriptionId = event?.current?.id ?? OneSignal.User.PushSubscription.id;
       if (subscriptionId) {
         saveSubscriptionId(subscriptionId);
       }
@@ -106,60 +100,59 @@ export default function OneSignalInitializer({ userId }: { userId?: string }) {
 
     const ensureLogin = async () => {
       try {
+        // המתנה לאתחול (Init)
         if (initPromiseRef.current) {
           await initPromiseRef.current;
         } else if (!initializedRef.current) {
-          console.log("[OneSignal] login waiting for init");
-          await new Promise<void>((resolve, reject) => {
-            let attempts = 0;
-            const interval = setInterval(() => {
-              if (initPromiseRef.current) {
-                clearInterval(interval);
-                initPromiseRef.current
-                  .then(() => resolve())
-                  .catch((error) => reject(error));
-                return;
-              }
-
-              if (initializedRef.current) {
-                clearInterval(interval);
-                resolve();
-                return;
-              }
-
-              attempts += 1;
-              if (attempts >= 20) {
-                clearInterval(interval);
-                reject(new Error("OneSignal init timed out"));
-              }
-            }, 250);
+          console.log("[OneSignal] Login waiting for init...");
+          await new Promise<void>((resolve) => {
+             const check = setInterval(() => {
+               if (initializedRef.current) {
+                 clearInterval(check);
+                 resolve();
+               }
+             }, 100);
+             // Timeout ביטחון של 5 שניות
+             setTimeout(() => { clearInterval(check); resolve(); }, 5000); 
           });
         }
 
-        console.log("[OneSignal] ensuring login for", userId);
+        if (!initializedRef.current) {
+           console.error("[OneSignal] Cannot login - Init failed or timed out");
+           return;
+        }
+
+        console.log("[OneSignal] Logging in user:", userId);
         await OneSignal.login(userId);
 
+        // בקשת הרשאה אם עדיין אין (חשוב למשתמשים חדשים!)
+        if (!OneSignal.Notifications.permission) {
+             console.log("[OneSignal] Requesting permission...");
+             await OneSignal.Notifications.requestPermission();
+        }
+
+        // ניסיון לשמור את ה-ID הקיים
         const subscriptionId = OneSignal.User.PushSubscription.id;
         if (subscriptionId) {
           saveSubscriptionId(subscriptionId);
+        } else {
+          console.log("[OneSignal] No subscription ID yet (User might need to allow notifications)");
         }
 
-        OneSignal.User.PushSubscription.addEventListener(
-          "change",
-          handleSubscriptionChange,
-        );
+        // האזנה לשינויים עתידיים (למשל אם המשתמש יאשר פתאום)
+        OneSignal.User.PushSubscription.addEventListener("change", handleSubscriptionChange);
+
       } catch (error) {
-        console.error("[OneSignal] login failed", error);
+        console.error("[OneSignal] Login sequence failed", error);
       }
     };
 
     ensureLogin();
 
     return () => {
-      OneSignal.User.PushSubscription.removeEventListener?.(
-        "change",
-        handleSubscriptionChange,
-      );
+      try {
+        OneSignal.User.PushSubscription.removeEventListener?.("change", handleSubscriptionChange);
+      } catch (e) { /* ignore cleanup errors */ }
     };
   }, [userId]);
 
