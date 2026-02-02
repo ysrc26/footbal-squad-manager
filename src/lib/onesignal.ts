@@ -17,11 +17,30 @@ const ensureServiceWorker = async () => {
   }
 
   try {
-    const registration = await navigator.serviceWorker.getRegistration("/");
-    if (!registration || !registration.active) {
-      await navigator.serviceWorker.register("/OneSignalSDKWorker.js", {
-        scope: "/",
-      });
+    const registrations = await navigator.serviceWorker.getRegistrations();
+    for (const registration of registrations) {
+      const scriptUrl = registration.active?.scriptURL || "";
+      const isOneSignalWorker =
+        scriptUrl.includes("OneSignalSDKWorker.js") ||
+        scriptUrl.includes("OneSignalSDK.sw.js");
+
+      if (!isOneSignalWorker) {
+        await registration.unregister();
+      }
+    }
+
+    let registration = await navigator.serviceWorker.getRegistration("/");
+    const hasActive = Boolean(registration?.active);
+
+    if (!registration || !hasActive) {
+      registration = await navigator.serviceWorker.register(
+        "/OneSignalSDKWorker.js",
+        { scope: "/" },
+      );
+    }
+
+    if (registration) {
+      await navigator.serviceWorker.ready;
     }
   } catch (error) {
     console.error("[OneSignal] Service worker registration failed", error);
