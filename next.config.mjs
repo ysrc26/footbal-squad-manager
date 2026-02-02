@@ -6,6 +6,11 @@ const withPWA = withPWAInit({
   register: true,
   skipWaiting: true,
   disable: process.env.NODE_ENV === "development", // בטל ב-Dev כדי לא לשגע את הדפדפן
+  workboxOptions: {
+    importScripts: [
+      "https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.sw.js",
+    ],
+  },
 });
 
 /** @type {import('next').NextConfig} */
