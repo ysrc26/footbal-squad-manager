@@ -10,7 +10,6 @@ import { toast } from 'sonner';
 import { Loader2, Phone } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
-import OneSignal from 'react-onesignal';
 
 interface PhoneValidation {
   isValid: boolean;
@@ -136,17 +135,6 @@ export default function Onboarding() {
       });
       setLoading(false);
       return;
-    }
-
-    try {
-      if (OneSignal.Notifications.isPushSupported()) {
-        OneSignal.Notifications.requestPermission();
-        if (user?.id) {
-          OneSignal.login(user.id);
-        }
-      }
-    } catch (error) {
-      console.error(error);
     }
 
     await refreshProfile();

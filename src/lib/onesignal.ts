@@ -1,16 +1,22 @@
 import OneSignal from "react-onesignal";
 
 const oneSignalConfig = {
-  appId: "76992db9-49f0-4ad6-9d56-a04be4578212",
-  safari_web_id: "web.onesignal.auto.34cabfa2-ddd9-46d0-b8b2-6fad793020e0",
+  appId: process.env.NEXT_PUBLIC_ONESIGNAL_APP_ID || "",
+  safari_web_id: process.env.NEXT_PUBLIC_SAFARI_WEB_ID,
   allowLocalhostAsSecureOrigin: true,
-  serviceWorkerPath: "OneSignalSDKWorker.js",
+  serviceWorkerPath: "/OneSignalSDKWorker.js",
+  serviceWorkerUpdaterPath: "/OneSignalSDKUpdaterWorker.js",
+  serviceWorkerParam: { scope: "/" },
 };
 
 let initPromise: Promise<void> | null = null;
 
 export const initOneSignal = async () => {
   if (!initPromise) {
+    if (!oneSignalConfig.appId) {
+      throw new Error("Missing NEXT_PUBLIC_ONESIGNAL_APP_ID");
+    }
+
     initPromise = OneSignal.init(oneSignalConfig).catch((error) => {
       initPromise = null;
       throw error;
