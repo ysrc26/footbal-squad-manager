@@ -152,6 +152,24 @@ export default function Profile() {
     }
   };
 
+  const handleEnableNotifications = async () => {
+    if (!OneSignal.Notifications.isPushSupported()) {
+      toast.error('הדפדפן/המכשיר לא תומך בהתראות');
+      return;
+    }
+
+    try {
+      await OneSignal.Notifications.requestPermission();
+      if (user?.id) {
+        await OneSignal.login(user.id);
+      }
+      toast.success('ההתראות הופעלו בהצלחה');
+    } catch (error) {
+      console.error(error);
+      toast.error('שגיאה בהפעלת התראות');
+    }
+  };
+
   return (
     <div className="min-h-screen gradient-dark">
       {/* Header */}
@@ -160,7 +178,7 @@ export default function Profile() {
           <Button variant="ghost" size="icon" onClick={() => router.back()}>
             <ArrowRight className="h-5 w-5" />
           </Button>
-          <h1 className="text-xl font-bold mr-2">פרופיל</h1>
+          <h1 className="text-xl font-bold mr-2">הגדרות</h1>
         </div>
       </header>
 
@@ -284,6 +302,22 @@ export default function Profile() {
                 )}
               </Button>
             </form>
+          </CardContent>
+        </Card>
+
+        <Card className="mt-6 border border-primary/40 bg-primary/5">
+          <CardHeader>
+            <CardTitle>הגדרות התראות</CardTitle>
+            <CardDescription>נהל את הרשאות ההתראות שלך</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Button
+              type="button"
+              className="w-full h-12 text-lg font-semibold neon-glow"
+              onClick={handleEnableNotifications}
+            >
+              הפעלת התראות
+            </Button>
           </CardContent>
         </Card>
 
