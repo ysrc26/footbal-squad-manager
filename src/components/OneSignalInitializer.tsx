@@ -42,7 +42,8 @@ export default function OneSignalInitializer({ userId }: { userId?: string }) {
         // מאזין להודעות כשהאפליקציה פתוחה (Foreground)
         OneSignal.Notifications.addEventListener("foregroundWillDisplay", (event) => {
           console.log("[OneSignal] Foreground notification received", event);
-          event.preventDefault();
+          // Some browsers don't allow preventing the native display in foreground.
+          // We avoid calling preventDefault to keep system notifications working.
           const notif = event.notification;
           toast(notif.title || "הודעה חדשה", {
             description: notif.body,
