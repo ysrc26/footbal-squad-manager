@@ -125,6 +125,11 @@ export default function Profile() {
 
   const handleForceNotifications = async () => {
     try {
+      if (!user?.id) {
+        alert('No logged in user found.');
+        return;
+      }
+
       if (!OneSignal.Notifications.isPushSupported()) {
         alert('Push notifications are not supported on this device/browser.');
         return;
@@ -136,6 +141,9 @@ export default function Profile() {
       alert(`Permission result: ${permission}`);
 
       if (permission) {
+        await OneSignal.login(user.id);
+        alert(`Linked to User ID: ${user.id}`);
+
         const id = OneSignal.User.PushSubscription.id;
         alert(`Great! Subscription ID: ${id}`);
       }
