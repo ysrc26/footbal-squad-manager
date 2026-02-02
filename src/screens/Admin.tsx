@@ -150,34 +150,24 @@ export default function Admin() {
 
       {/* Bottom Navigation */}
       <nav className="fixed bottom-0 left-0 right-0 glass border-t border-border/50 backdrop-blur-xl">
-        <div
-          className={`container grid ${
-            isAdmin ? "grid-cols-4" : "grid-cols-3"
-          } items-center justify-items-center py-3`}
-        >
+        <div className="container flex items-center justify-between py-3">
           <Link
             href="/"
-            className={`flex flex-col items-center gap-1 text-muted-foreground hover:text-primary transition-colors ${
-              isAdmin ? "col-start-4" : "col-start-3"
-            }`}
+            className="flex flex-col items-center gap-1 text-muted-foreground hover:text-primary transition-colors"
           >
             <Home className="h-6 w-6" />
             <span className="text-xs">ראשי</span>
           </Link>
           <Link
             href="/rules"
-            className={`flex flex-col items-center gap-1 text-muted-foreground hover:text-primary transition-colors ${
-              isAdmin ? "col-start-3" : "col-start-2"
-            }`}
+            className="flex flex-col items-center gap-1 text-muted-foreground hover:text-primary transition-colors"
           >
             <FileText className="h-6 w-6" />
             <span className="text-xs">חוקים</span>
           </Link>
           <Link
             href="/profile"
-            className={`flex flex-col items-center gap-1 text-muted-foreground hover:text-primary transition-colors ${
-              isAdmin ? "col-start-2" : "col-start-1"
-            }`}
+            className="flex flex-col items-center gap-1 text-muted-foreground hover:text-primary transition-colors"
           >
             <User className="h-6 w-6" />
             <span className="text-xs">הגדרות</span>
@@ -185,7 +175,7 @@ export default function Admin() {
           {isAdmin && (
             <Link
               href="/admin"
-              className="col-start-1 flex flex-col items-center gap-1 text-primary"
+              className="flex flex-col items-center gap-1 text-primary"
             >
               <Settings className="h-6 w-6" />
               <span className="text-xs">ניהול</span>

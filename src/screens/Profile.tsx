@@ -21,6 +21,8 @@ export default function Profile() {
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [fullName, setFullName] = useState('');
   const [isResident, setIsResident] = useState(false);
+  const [notificationsEnabled, setNotificationsEnabled] = useState(false);
+  const [notificationsLoading, setNotificationsLoading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -123,52 +125,96 @@ export default function Profile() {
     setLoading(false);
   };
 
-  const handleForceNotifications = async () => {
+  const waitForOneSignalReady = async () => {
+    for (let i = 0; i < 50; i += 1) {
+      if (OneSignal?.Notifications && OneSignal?.User?.PushSubscription) {
+        return true;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+    return false;
+  };
+
+  const handleEnableNotifications = async () => {
     try {
-      if (!user?.id) {
-        alert('No logged in user found.');
+      setNotificationsLoading(true);
+      const ready = await waitForOneSignalReady();
+      if (!ready) {
+        toast.error('מערכת ההתראות עדיין נטענת, נסה שוב בעוד רגע');
         return;
       }
 
       if (!OneSignal.Notifications.isPushSupported()) {
-        alert('Push notifications are not supported on this device/browser.');
+        toast.error('הדפדפן/המכשיר לא תומך בהתראות');
         return;
       }
 
-      console.log('Requesting permission...');
-      const permission = await OneSignal.Notifications.requestPermission();
-
-      alert(`Permission result: ${permission}`);
-
-      if (permission) {
-        await OneSignal.login(user.id);
-        alert(`Linked to User ID: ${user.id}`);
-
-        const id = OneSignal.User.PushSubscription.id;
-        alert(`Great! Subscription ID: ${id}`);
-      }
-    } catch (error) {
-      alert(`Error: ${error}`);
-    }
-  };
-
-  const handleEnableNotifications = async () => {
-    if (!OneSignal.Notifications.isPushSupported()) {
-      toast.error('הדפדפן/המכשיר לא תומך בהתראות');
-      return;
-    }
-
-    try {
       await OneSignal.Notifications.requestPermission();
       if (user?.id) {
         await OneSignal.login(user.id);
       }
+      await new Promise((resolve) => setTimeout(resolve, 300));
+      const subscriptionId = OneSignal.User.PushSubscription?.id;
+      setNotificationsEnabled(Boolean(subscriptionId));
       toast.success('ההתראות הופעלו בהצלחה');
     } catch (error) {
       console.error(error);
       toast.error('שגיאה בהפעלת התראות');
+    } finally {
+      setNotificationsLoading(false);
     }
   };
+
+  const handleDisableNotifications = async () => {
+    try {
+      setNotificationsLoading(true);
+      const ready = await waitForOneSignalReady();
+      if (!ready) {
+        toast.error('מערכת ההתראות עדיין נטענת, נסה שוב בעוד רגע');
+        return;
+      }
+
+      if (typeof OneSignal.User?.PushSubscription?.optOut === 'function') {
+        await OneSignal.User.PushSubscription.optOut();
+      } else if (typeof OneSignal.Notifications?.setSubscription === 'function') {
+        await OneSignal.Notifications.setSubscription(false);
+      } else if (typeof OneSignal.User?.PushSubscription?.setOptedOut === 'function') {
+        await OneSignal.User.PushSubscription.setOptedOut(true);
+      }
+
+      if (typeof OneSignal.logout === 'function') {
+        await OneSignal.logout();
+      }
+
+      if (user?.id) {
+        await supabase.from('profiles').update({ onesignal_id: null }).eq('id', user.id);
+      }
+
+      setNotificationsEnabled(false);
+      toast.success('ההתראות כובו בהצלחה');
+    } catch (error) {
+      console.error(error);
+      toast.error('שגיאה בכיבוי התראות');
+    } finally {
+      setNotificationsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    let active = true;
+
+    const syncNotificationsState = async () => {
+      const ready = await waitForOneSignalReady();
+      if (!ready || !active) return;
+      const subscriptionId = OneSignal.User.PushSubscription?.id;
+      setNotificationsEnabled(Boolean(subscriptionId));
+    };
+
+    syncNotificationsState();
+    return () => {
+      active = false;
+    };
+  }, []);
 
   return (
     <div className="min-h-screen gradient-dark">
@@ -311,30 +357,26 @@ export default function Profile() {
             <CardDescription>נהל את הרשאות ההתראות שלך</CardDescription>
           </CardHeader>
           <CardContent>
-            <Button
-              type="button"
-              className="w-full h-12 text-lg font-semibold neon-glow"
-              onClick={handleEnableNotifications}
-            >
-              הפעלת התראות
-            </Button>
-          </CardContent>
-        </Card>
-
-        <Card className="mt-6 border border-primary/40 bg-primary/5">
-          <CardHeader>
-            <CardTitle>Debugging</CardTitle>
-            <CardDescription>כלי בדיקה ידני להתראות בדפדפן</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Button
-              type="button"
-              variant="secondary"
-              className="w-full h-12"
-              onClick={handleForceNotifications}
-            >
-              Enable Notifications (Force)
-            </Button>
+            {notificationsEnabled ? (
+              <Button
+                type="button"
+                variant="secondary"
+                className="w-full h-12 text-lg font-semibold"
+                onClick={handleDisableNotifications}
+                disabled={notificationsLoading}
+              >
+                {notificationsLoading ? 'מכבה...' : 'כבה התראות'}
+              </Button>
+            ) : (
+              <Button
+                type="button"
+                className="w-full h-12 text-lg font-semibold neon-glow"
+                onClick={handleEnableNotifications}
+                disabled={notificationsLoading}
+              >
+                {notificationsLoading ? 'מפעיל...' : 'הפעלת התראות'}
+              </Button>
+            )}
           </CardContent>
         </Card>
       </main>
