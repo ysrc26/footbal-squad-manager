@@ -34,6 +34,8 @@ export default function OneSignalInitializer({ userId }: { userId?: string }) {
             safari_web_id: safariWebId,
             allowLocalhostAsSecureOrigin: true,
             serviceWorkerPath: "/OneSignalSDKWorker.js",
+            serviceWorkerUpdaterPath: "/OneSignalSDKUpdaterWorker.js",
+            serviceWorkerParam: { scope: "/" },
           });
 
           initializedRef.current = true;
