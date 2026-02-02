@@ -18,6 +18,8 @@ export function GameManagement() {
   const [loading, setLoading] = useState(true);
   const [creatingAuto, setCreatingAuto] = useState(false);
   const [showCreateForm, setShowCreateForm] = useState(false);
+  const [swapRunningId, setSwapRunningId] = useState<string | null>(null);
+  const [swapResults, setSwapResults] = useState<Record<string, { count: number; users: string[] }>>({});
 
   useEffect(() => {
     fetchGames();
@@ -73,6 +75,40 @@ export function GameManagement() {
       toast.error('שגיאה במחיקת המשחק', { description: error.message });
     }
   };
+
+  const runLateSwaps = async (gameId: string) => {
+    setSwapRunningId(gameId);
+    try {
+      const { data, error } = await supabase.rpc('process_late_swaps', {
+        _game_id: gameId,
+      });
+
+      if (error) throw error;
+
+      const result = Array.isArray(data) ? data[0] : data;
+      const swaps = Array.isArray(result?.swaps) ? result.swaps : [];
+      const count = result?.swaps_count ?? 0;
+      const users = swaps
+        .flatMap((swap: any) => [swap.promoted_user_id, swap.demoted_user_id])
+        .filter(Boolean);
+
+      setSwapResults((prev) => ({
+        ...prev,
+        [gameId]: {
+          count,
+          users: Array.from(new Set(users)),
+        },
+      }));
+
+      toast.success(`בוצעו ${count} החלפות`);
+    } catch (error: any) {
+      toast.error('שגיאה בהרצת החלפות', { description: error.message });
+    } finally {
+      setSwapRunningId(null);
+    }
+  };
+
+  const formatUserId = (userId: string) => userId.slice(0, 8);
 
   const formatDate = (dateStr: string) => {
     const date = new Date(dateStr);
@@ -212,15 +248,46 @@ export function GameManagement() {
                         {game.max_players}/{game.max_standby} שחקנים/המתנה
                       </span>
                     </div>
+                    {swapResults[game.id] && (
+                      <div className="text-xs text-muted-foreground">
+                        החלפות: {swapResults[game.id].count}
+                        {swapResults[game.id].users.length > 0 && (
+                          <>
+                            {' '}
+                            | משתמשים:{' '}
+                            {swapResults[game.id].users
+                              .slice(0, 3)
+                              .map(formatUserId)
+                              .join(', ')}
+                            {swapResults[game.id].users.length > 3 &&
+                              ` +${swapResults[game.id].users.length - 3}`}
+                          </>
+                        )}
+                      </div>
+                    )}
                   </div>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => deleteGame(game.id)}
-                    className="text-destructive hover:text-destructive"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => runLateSwaps(game.id)}
+                      disabled={swapRunningId === game.id}
+                    >
+                      {swapRunningId === game.id ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        'הרץ החלפות מאוחרות'
+                      )}
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => deleteGame(game.id)}
+                      className="text-destructive hover:text-destructive"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
                 </div>
               ))}
             </div>

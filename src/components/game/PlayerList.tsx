@@ -45,7 +45,7 @@ export function PlayerList({ title, players, maxPlayers, showPosition, emptyMess
               <div className="flex items-center gap-3">
                   {showPosition ? (
                     <span className="w-6 h-6 rounded-full bg-primary/20 text-primary text-xs flex items-center justify-center font-medium">
-                      {index + 1}
+                      {registration.queue_position ?? index + 1}
                     </span>
                   ) : registration.avatar_url ? (
                     <img 
