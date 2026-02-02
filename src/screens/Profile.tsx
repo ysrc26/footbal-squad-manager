@@ -176,10 +176,8 @@ export default function Profile() {
 
       if (typeof OneSignal.User?.PushSubscription?.optOut === 'function') {
         await OneSignal.User.PushSubscription.optOut();
-      } else if (typeof OneSignal.Notifications?.setSubscription === 'function') {
-        await OneSignal.Notifications.setSubscription(false);
-      } else if (typeof OneSignal.User?.PushSubscription?.setOptedOut === 'function') {
-        await OneSignal.User.PushSubscription.setOptedOut(true);
+      } else if (typeof (OneSignal.User?.PushSubscription as { setOptedOut?: (value: boolean) => Promise<void> })?.setOptedOut === 'function') {
+        await (OneSignal.User?.PushSubscription as { setOptedOut?: (value: boolean) => Promise<void> }).setOptedOut?.(true);
       }
 
       if (typeof OneSignal.logout === 'function') {
