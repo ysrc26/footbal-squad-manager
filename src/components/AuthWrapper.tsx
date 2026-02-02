@@ -75,22 +75,20 @@ export default function AuthWrapper({ children, requireAdmin = false }: AuthWrap
     setRedirecting(false);
   }, [loading, checkingProfile, user, profile?.phone_number, requireAdmin, isAdmin, router]);
 
+  let content: ReactNode = children;
+
   // 1. קודם כל מטפלים בטעינה הכללית
   if (loading || checkingProfile || redirecting) {
-    return (
+    content = (
       <div className="min-h-screen flex items-center justify-center gradient-dark">
-        {oneSignalInitializer}
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
       </div>
     );
-  }
-
-  // 2. אם יש יוזר אבל הפרופיל עדיין לא נטען (למרות שסיימנו loading)
-  // זה אומר שאנחנו בשלב ביניים - עדיף להציג טעינה מאשר לזרוק החוצה
-  if (!profile) {
-    return (
+  } else if (!profile) {
+    // 2. אם יש יוזר אבל הפרופיל עדיין לא נטען (למרות שסיימנו loading)
+    // זה אומר שאנחנו בשלב ביניים - עדיף להציג טעינה מאשר לזרוק החוצה
+    content = (
       <div className="min-h-screen flex items-center justify-center gradient-dark">
-        {oneSignalInitializer}
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
       </div>
     );
@@ -99,7 +97,7 @@ export default function AuthWrapper({ children, requireAdmin = false }: AuthWrap
   return (
     <>
       {oneSignalInitializer}
-      {children}
+      {content}
     </>
   );
 }

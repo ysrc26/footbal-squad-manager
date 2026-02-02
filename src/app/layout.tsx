@@ -19,6 +19,9 @@ export const metadata = {
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="he" dir="rtl">
+      <head>
+        <meta name="mobile-web-app-capable" content="yes" />
+      </head>
       <body>
         <Providers>{children}</Providers>
         <Toaster />

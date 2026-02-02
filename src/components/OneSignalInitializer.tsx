@@ -20,7 +20,15 @@ export default function OneSignalInitializer({ userId }: { userId?: string }) {
 
       if (!initPromiseRef.current) {
         console.log("[OneSignal] Init start");
-        initPromiseRef.current = (async () => {
+        const existingPromise = (window as Window & {
+          __oneSignalInitPromise?: Promise<void>;
+          __oneSignalInitDone?: boolean;
+        }).__oneSignalInitPromise;
+
+        if (existingPromise) {
+          initPromiseRef.current = existingPromise;
+        } else {
+          initPromiseRef.current = (async () => {
           const appId = process.env.NEXT_PUBLIC_ONESIGNAL_APP_ID;
           const safariWebId = process.env.NEXT_PUBLIC_SAFARI_WEB_ID;
 
@@ -39,6 +47,7 @@ export default function OneSignalInitializer({ userId }: { userId?: string }) {
           });
 
           initializedRef.current = true;
+          (window as Window & { __oneSignalInitDone?: boolean }).__oneSignalInitDone = true;
           console.log("[OneSignal] Init success");
 
           // מאזין להודעות כשהאפליקציה פתוחה (Foreground)
@@ -54,10 +63,14 @@ export default function OneSignalInitializer({ userId }: { userId?: string }) {
               },
             });
           });
-        })().catch((error) => {
-          initPromiseRef.current = null;
-          console.error("[OneSignal] Init failed", error);
-        });
+          })().catch((error) => {
+            initPromiseRef.current = null;
+            (window as Window & { __oneSignalInitPromise?: Promise<void> }).__oneSignalInitPromise = undefined;
+            console.error("[OneSignal] Init failed", error);
+          });
+
+          (window as Window & { __oneSignalInitPromise?: Promise<void> }).__oneSignalInitPromise = initPromiseRef.current;
+        }
       }
       await initPromiseRef.current;
     };
