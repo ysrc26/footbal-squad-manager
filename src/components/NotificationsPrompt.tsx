@@ -73,7 +73,7 @@ export default function NotificationsPrompt() {
         return;
       }
 
-      const permission = await OneSignal.Notifications.requestPermission();
+      const permission = String(await OneSignal.Notifications.requestPermission());
       if (permission !== "granted") {
         toast.error("ההרשאה נדחתה. אפשר להפעיל בהגדרות הדפדפן");
         handleLater();
