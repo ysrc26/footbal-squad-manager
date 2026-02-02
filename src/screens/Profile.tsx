@@ -12,6 +12,7 @@ import { toast } from 'sonner';
 import { Loader2, ArrowRight, User, Phone, Home, Camera } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
+import OneSignal from 'react-onesignal';
 
 export default function Profile() {
   const { user, profile, refreshProfile } = useAuth();
@@ -120,6 +121,27 @@ export default function Profile() {
       await refreshProfile();
     }
     setLoading(false);
+  };
+
+  const handleForceNotifications = async () => {
+    try {
+      if (!OneSignal.Notifications.isPushSupported()) {
+        alert('Push notifications are not supported on this device/browser.');
+        return;
+      }
+
+      console.log('Requesting permission...');
+      const permission = await OneSignal.Notifications.requestPermission();
+
+      alert(`Permission result: ${permission}`);
+
+      if (permission) {
+        const id = OneSignal.User.PushSubscription.id;
+        alert(`Great! Subscription ID: ${id}`);
+      }
+    } catch (error) {
+      alert(`Error: ${error}`);
+    }
   };
 
   return (
@@ -254,6 +276,23 @@ export default function Profile() {
                 )}
               </Button>
             </form>
+          </CardContent>
+        </Card>
+
+        <Card className="mt-6 border border-primary/40 bg-primary/5">
+          <CardHeader>
+            <CardTitle>Debugging</CardTitle>
+            <CardDescription>כלי בדיקה ידני להתראות בדפדפן</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Button
+              type="button"
+              variant="secondary"
+              className="w-full h-12"
+              onClick={handleForceNotifications}
+            >
+              Enable Notifications (Force)
+            </Button>
           </CardContent>
         </Card>
       </main>
