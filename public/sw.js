@@ -11,6 +11,8 @@
  * limitations under the License.
  */
 
+importScripts("https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.sw.js");
+
 // If the loader is already loaded, just stop.
 if (!self.define) {
   let registry = {};
