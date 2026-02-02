@@ -3,6 +3,7 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { User } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
+import { clearOneSignalExternalUserId, initOneSignal, setOneSignalExternalUserId } from '@/lib/onesignal';
 
 interface Profile {
   id: string;
@@ -10,6 +11,7 @@ interface Profile {
   phone_number: string | null;
   avatar_url: string | null;
   is_resident: boolean;
+  push_enabled?: boolean | null;
   created_at: string;
   updated_at: string;
 }
@@ -76,6 +78,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setTimeout(async () => {
             await fetchProfile(session.user.id);
             await checkAdminRole(session.user.id);
+            try {
+              await initOneSignal();
+              await setOneSignalExternalUserId(session.user.id);
+            } catch {
+              // Ignore OneSignal init errors to avoid blocking auth flow.
+            }
           }, 0);
         } else {
           setProfile(null);
@@ -91,6 +99,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (session?.user) {
         fetchProfile(session.user.id);
         checkAdminRole(session.user.id);
+        initOneSignal()
+          .then(() => setOneSignalExternalUserId(session.user.id))
+          .catch(() => {
+            // Ignore OneSignal init errors to avoid blocking auth flow.
+          });
       }
       setLoading(false);
     });
@@ -100,6 +113,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signOut = async () => {
     await supabase.auth.signOut();
+    await clearOneSignalExternalUserId();
     setUser(null);
     setProfile(null);
     setIsAdmin(false);

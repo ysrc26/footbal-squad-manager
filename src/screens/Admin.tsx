@@ -6,14 +6,15 @@ import Link from 'next/link';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import { ArrowRight, Users, Settings, QrCode, FileText, Home, User, ChevronLeft, Calendar } from 'lucide-react';
+import { ArrowRight, Users, Settings, QrCode, FileText, Home, User, ChevronLeft, Calendar, Bell } from 'lucide-react';
 import { UserManagement } from '@/components/admin/UserManagement';
 import { AppSettings } from '@/components/admin/AppSettings';
 import { QrCodeGenerator } from '@/components/admin/QrCodeGenerator';
 import { RulesEditor } from '@/components/admin/RulesEditor';
 import { GameManagement } from '@/components/admin/GameManagement';
+import { PushNotifications } from '@/components/admin/PushNotifications';
 
-type AdminView = 'menu' | 'users' | 'settings' | 'qr' | 'rules' | 'games';
+type AdminView = 'menu' | 'users' | 'settings' | 'qr' | 'rules' | 'games' | 'push';
 
 export default function Admin() {
   const router = useRouter();
@@ -56,6 +57,13 @@ export default function Admin() {
       description: 'תוכן חוקי המשחק',
       disabled: false,
     },
+    {
+      id: 'push' as AdminView,
+      icon: Bell,
+      title: 'התראות פוש',
+      description: 'שליחה ידנית של התראות',
+      disabled: false,
+    },
   ];
 
   const handleBack = () => {
@@ -78,6 +86,8 @@ export default function Admin() {
         return 'יצירת קוד QR';
       case 'rules':
         return 'עריכת חוקים';
+      case 'push':
+        return 'התראות פוש';
       default:
         return 'ניהול מערכת';
     }
@@ -95,6 +105,8 @@ export default function Admin() {
         return <QrCodeGenerator />;
       case 'rules':
         return <RulesEditor />;
+      case 'push':
+        return <PushNotifications />;
       case 'menu':
       default:
         return (

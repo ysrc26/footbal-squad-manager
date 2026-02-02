@@ -9,9 +9,10 @@ import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
-import { Loader2, ArrowRight, User, Phone, Home, Camera } from 'lucide-react';
+import { Loader2, ArrowRight, User, Phone, Home, Camera, Bell } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
+import { initOneSignal, isPushSupported, optInPush, optOutPush, requestPushPermission } from '@/lib/onesignal';
 
 export default function Profile() {
   const { user, profile, refreshProfile } = useAuth();
@@ -20,14 +21,22 @@ export default function Profile() {
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [fullName, setFullName] = useState('');
   const [isResident, setIsResident] = useState(false);
+  const [pushEnabled, setPushEnabled] = useState(true);
+  const [pushLoading, setPushLoading] = useState(false);
+  const [pushSupported, setPushSupported] = useState(true);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (profile) {
       setFullName(profile.full_name || '');
       setIsResident(profile.is_resident || false);
+      setPushEnabled(profile.push_enabled ?? true);
     }
   }, [profile]);
+
+  useEffect(() => {
+    setPushSupported(isPushSupported());
+  }, []);
 
   // Check if this is first time setup (no name set yet)
   const isFirstTimeSetup = !profile?.full_name;
@@ -120,6 +129,46 @@ export default function Profile() {
       await refreshProfile();
     }
     setLoading(false);
+  };
+
+  const handlePushToggle = async (enabled: boolean) => {
+    if (!user) return;
+
+    setPushLoading(true);
+    try {
+      await initOneSignal();
+
+      if (enabled) {
+        const permission = await requestPushPermission();
+        if (permission !== 'granted') {
+          toast.error('נדרש אישור התראות בדפדפן כדי להפעיל פוש');
+          setPushEnabled(false);
+          return;
+        }
+
+        await optInPush();
+      } else {
+        await optOutPush();
+      }
+
+      const { error } = await supabase
+        .from('profiles')
+        .update({ push_enabled: enabled, updated_at: new Date().toISOString() })
+        .eq('id', user.id);
+
+      if (error) throw error;
+
+      setPushEnabled(enabled);
+      await refreshProfile();
+      toast.success(enabled ? 'התראות פוש הופעלו' : 'התראות פוש הושבתו');
+    } catch (error: any) {
+      toast.error('שגיאה בעדכון התראות פוש', {
+        description: error.message,
+      });
+      setPushEnabled(profile?.push_enabled ?? true);
+    } finally {
+      setPushLoading(false);
+    }
   };
 
   return (
@@ -241,6 +290,26 @@ export default function Profile() {
                   </Badge>
                 </div>
               )}
+
+              <div className="flex items-center justify-between p-4 rounded-lg bg-secondary/50">
+                <div className="flex items-center gap-3">
+                  <Bell className="h-5 w-5 text-primary" />
+                  <div>
+                    <Label htmlFor="pushEnabled" className="text-base font-medium cursor-pointer">
+                      התראות פוש
+                    </Label>
+                    <p className="text-sm text-muted-foreground">
+                      קבל עדכונים על פתיחת הרשמה ותזכורות למשחק
+                    </p>
+                  </div>
+                </div>
+                <Switch
+                  id="pushEnabled"
+                  checked={pushEnabled}
+                  onCheckedChange={handlePushToggle}
+                  disabled={!pushSupported || pushLoading}
+                />
+              </div>
 
               <Button 
                 type="submit" 
