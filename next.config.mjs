@@ -11,7 +11,7 @@ const withPWA = withPWAInit({
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
-  // הערה: אין צורך במפתח 'pwa' כאן בפנים, ההגדרות עברו למעלה
+  turbopack: {},
 };
 
 // 2. ייצוא הקונפיגורציה העטופה
