@@ -8,7 +8,7 @@ const nextConfig = {
     register: true,
     skipWaiting: true,
     disable: process.env.NODE_ENV === "development",
-    importScripts: ["/OneSignalSDKWorker.js"],
+    swSrc: "src/sw.js",
   },
 };
 

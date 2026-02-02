@@ -19,10 +19,7 @@ const ensureServiceWorker = async () => {
     const registrations = await navigator.serviceWorker.getRegistrations();
     for (const registration of registrations) {
       const scriptUrl = registration.active?.scriptURL || "";
-      const isOneSignalWorker =
-        scriptUrl.includes("OneSignalSDKWorker.js") ||
-        scriptUrl.includes("OneSignalSDK.sw.js") ||
-        scriptUrl.endsWith("/sw.js");
+      const isOneSignalWorker = scriptUrl.endsWith("/sw.js");
 
       if (!isOneSignalWorker) {
         await registration.unregister();
