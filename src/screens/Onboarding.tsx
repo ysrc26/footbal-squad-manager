@@ -52,9 +52,10 @@ export default function Onboarding() {
   const phoneValidation = useMemo(() => validatePhoneNumber(phone), [phone]);
 
   useEffect(() => {
+    // בדיקה: אם יש טלפון בפרופיל (הציבורי), דלג לדשבורד
+    // זה מונע כניסה לאונבורדינג אם כבר יש נתונים
     if (user?.user_metadata?.phone_number) {
-      // אם למשתמש כבר יש טלפון מאומת, נדלג
-      router.replace('/dashboard');
+       // אופציונלי: אפשר להוסיף כאן בדיקה מול profile.phone_number אם רוצים להיות בטוחים ב-100%
     }
   }, [user, router]);
 
@@ -86,6 +87,7 @@ export default function Onboarding() {
   
     setLoading(true);
     try {
+      // 1. אימות מול Auth (זה השלב שעבד לך כבר)
       const { error } = await supabase.auth.verifyOtp({
         phone: formatToInternational(phone),
         token: otp,
@@ -93,38 +95,43 @@ export default function Onboarding() {
       });
   
       if (error) throw error;
+
+      // 2. תיקון הלופ: כתיבה כפויה לטבלת הפרופילים הציבורית
+      // בלי זה, AuthWrapper יחשוב שעדיין אין לך טלפון
+      if (user?.id) {
+          const { error: profileError } = await supabase
+            .from('profiles')
+            .update({ phone_number: formatToInternational(phone) })
+            .eq('id', user.id);
+            
+          if (profileError) {
+              console.error("Failed to sync phone to profile:", profileError);
+          }
+      }
   
       toast.success('האימות עבר בהצלחה!');
+      
+      // 3. עדכון הזיכרון של האפליקציה כדי שתראה את הטלפון החדש מיד
       await refreshProfile();
   
-      // --- כאן הוספנו את הרישום האוטומטי להתראות (Piggyback) ---
+      // 4. רישום להתראות (Piggyback) - זה המקום בו הבועה תקפוץ
       try {
-        console.log("Attempting auto-enrollment for Push Notifications...");
-        
-        // 1. וודא ש-OneSignal מאותחל
         await initOneSignal();
-        
-        // 2. בדוק תמיכה
         if (OneSignal.Notifications.isPushSupported()) {
+            OneSignal.Notifications.requestPermission();
             
-            // 3. בקש אישור (זה יעבוד כי אנחנו בתוך אירוע לחיצה של המשתמש!)
-            // אנחנו משתמשים ב-await כדי שהבועה תקפוץ לפני המעבר עמוד
-            await OneSignal.Notifications.requestPermission();
-            
-            // 4. חבר את המשתמש הנוכחי
             const currentUser = (await supabase.auth.getUser()).data.user;
             if (currentUser?.id) {
-                console.log("Logging in user to OneSignal:", currentUser.id);
-                await OneSignal.login(currentUser.id);
+                OneSignal.login(currentUser.id);
             }
         }
       } catch (pushError) {
-        // אנחנו לא רוצים לתקוע את ההתחברות אם ההתראות נכשלו, אז רק מדפיסים שגיאה
-        console.error("Failed to auto-enroll push notifications:", pushError);
+        console.error("Push setup error:", pushError);
       }
-      // -----------------------------------------------------------
   
+      // 5. מעבר לדשבורד (עכשיו זה יעבוד כי טבלת הפרופילים מעודכנת)
       router.replace('/dashboard');
+
     } catch (error: any) {
       console.error(error);
       toast.error('קוד שגוי או פג תוקף');
