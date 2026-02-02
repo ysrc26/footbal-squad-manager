@@ -1,14 +1,18 @@
-import withPWA from "@ducanh2912/next-pwa";
+import withPWAInit from "@ducanh2912/next-pwa";
+
+// 1. אתחול ה-PWA עם ההגדרות שלו בנפרד
+const withPWA = withPWAInit({
+  dest: "public",
+  register: true,
+  skipWaiting: true,
+  disable: process.env.NODE_ENV === "development", // בטל ב-Dev כדי לא לשגע את הדפדפן
+});
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
-  pwa: {
-    dest: "public",
-    register: true,
-    skipWaiting: true,
-    disable: process.env.NODE_ENV === "development",
-  },
+  // הערה: אין צורך במפתח 'pwa' כאן בפנים, ההגדרות עברו למעלה
 };
 
+// 2. ייצוא הקונפיגורציה העטופה
 export default withPWA(nextConfig);
