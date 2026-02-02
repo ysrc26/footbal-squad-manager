@@ -169,7 +169,7 @@ export function AppSettings() {
             מיקום המגרש
           </CardTitle>
           <CardDescription>
-            הגדר את קואורדינטות המגרש לאימות צ'ק-אין (רדיוס 10 מטר)
+            הגדר את קואורדינטות המגרש לאימות צ&apos;ק-אין (רדיוס 10 מטר)
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">

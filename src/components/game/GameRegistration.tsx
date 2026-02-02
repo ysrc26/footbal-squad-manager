@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -63,7 +63,7 @@ export function GameRegistration() {
         supabase.removeChannel(channel);
       };
     }
-  }, [currentGame?.id]);
+  }, [currentGame, fetchRegistrations]);
 
   const fetchCurrentGame = async () => {
     try {
@@ -86,7 +86,7 @@ export function GameRegistration() {
     }
   };
 
-  const fetchRegistrations = async () => {
+  const fetchRegistrations = useCallback(async () => {
     if (!currentGame || !user) return;
 
     try {
@@ -166,7 +166,7 @@ export function GameRegistration() {
     } catch (error: any) {
       console.error('Error fetching registrations:', error);
     }
-  };
+  }, [currentGame, user]);
 
   const canRegister = () => {
     if (!currentGame) return false;
@@ -513,7 +513,7 @@ export function GameRegistration() {
                   )}
                   {isCheckedIn && (
                     <Badge className="mt-1 bg-green-500/20 text-green-500 border-green-500/50">
-                      ✓ עשית צ'ק-אין
+                      ✓ עשית צ&apos;ק-אין
                     </Badge>
                   )}
                 </div>
