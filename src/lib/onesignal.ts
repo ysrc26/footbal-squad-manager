@@ -51,11 +51,12 @@ export const initOneSignal = async () => {
     window.OneSignal = window.OneSignal || [];
 
     await withOneSignal(async (os) => {
+      console.info("[OneSignal] Using service worker path:", "sw.js");
       await os.init({
         appId: ONESIGNAL_APP_ID,
         allowLocalhostAsSecureOrigin: true,
-        serviceWorkerPath: "/sw.js",
-        serviceWorkerUpdaterPath: "/sw.js",
+        serviceWorkerPath: "sw.js",
+        serviceWorkerUpdaterPath: "sw.js",
         serviceWorkerParam: { scope: "/" },
         notifyButton: { enable: false },
       });
