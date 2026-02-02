@@ -44,7 +44,7 @@ export default function OneSignalInitializer({ userId }: { userId?: string }) {
             (event) => {
               console.log("[OneSignal] foreground notification received", event);
               event.preventDefault();
-              const notif = event.getNotification();
+            const notif = event.notification;
               toast(notif.title || "הודעה חדשה", {
                 description: notif.body,
                 action: {
