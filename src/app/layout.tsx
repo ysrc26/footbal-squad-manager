@@ -5,6 +5,14 @@ import { Providers } from "./providers";
 export const metadata = {
   title: "כדורגל נחלים",
   description: "מערכת ניהול קבוצת כדורגל",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "default",
+    title: "FSM",
+  },
+  formatDetection: {
+    telephone: false,
+  },
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
