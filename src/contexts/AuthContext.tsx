@@ -3,6 +3,8 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { User } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
+import OneSignal from 'react-onesignal';
+import { initOneSignal } from '@/lib/onesignal';
 
 interface Profile {
   id: string;
@@ -97,6 +99,37 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     return () => subscription.unsubscribe();
   }, []);
+
+  useEffect(() => {
+    if (loading) {
+      return;
+    }
+
+    let isActive = true;
+
+    const syncOneSignalIdentity = async () => {
+      try {
+        await initOneSignal();
+        if (!isActive) {
+          return;
+        }
+
+        if (user?.id) {
+          await OneSignal.login(user.id);
+        } else {
+          await OneSignal.logout();
+        }
+      } catch (error) {
+        console.error('OneSignal identity sync failed', error);
+      }
+    };
+
+    syncOneSignalIdentity();
+
+    return () => {
+      isActive = false;
+    };
+  }, [user?.id, loading]);
 
   const signOut = async () => {
     await supabase.auth.signOut();
