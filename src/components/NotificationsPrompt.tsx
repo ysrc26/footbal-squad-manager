@@ -81,6 +81,11 @@ export default function NotificationsPrompt() {
       }
 
       await OneSignal.login(user.id);
+      if (typeof OneSignal.User?.PushSubscription?.optIn === "function") {
+        await OneSignal.User.PushSubscription.optIn();
+      } else if (typeof (OneSignal.User?.PushSubscription as { setOptedOut?: (value: boolean) => Promise<void> })?.setOptedOut === "function") {
+        await (OneSignal.User?.PushSubscription as { setOptedOut?: (value: boolean) => Promise<void> }).setOptedOut?.(false);
+      }
       toast.success("ההתראות הופעלו בהצלחה");
       localStorage.setItem(`${PROMPT_STORAGE_KEY}:${user.id}`, "1");
       setOpen(false);

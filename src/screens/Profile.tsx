@@ -158,6 +158,11 @@ export default function Profile() {
       if (user?.id) {
         await OneSignal.login(user.id);
       }
+      if (typeof OneSignal.User?.PushSubscription?.optIn === "function") {
+        await OneSignal.User.PushSubscription.optIn();
+      } else if (typeof (OneSignal.User?.PushSubscription as { setOptedOut?: (value: boolean) => Promise<void> })?.setOptedOut === "function") {
+        await (OneSignal.User?.PushSubscription as { setOptedOut?: (value: boolean) => Promise<void> }).setOptedOut?.(false);
+      }
       let enabled = false;
       for (let i = 0; i < 10; i += 1) {
         const subscriptionId = OneSignal.User.PushSubscription?.id;
