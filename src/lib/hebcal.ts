@@ -1,6 +1,6 @@
 /**
  * Hebcal API integration for fetching Shabbat times
- * Location: Nahalim (נחלים), Israel - geonameid=294071
+ * Location: Nahalim (נחלים), Israel - geonameid=294093
  */
 
 export interface ShabbatTimes {
@@ -26,8 +26,8 @@ interface HebcalResponse {
   items: HebcalItem[];
 }
 
-// נחלים, ישראל - geonameid=294071
-const NAHALIM_GEONAME_ID = 294071;
+// נחלים, ישראל - geonameid=294093
+const NAHALIM_GEONAME_ID = 294093;
 
 /**
  * Fetches Shabbat times from Hebcal API for Nahalim, Israel
