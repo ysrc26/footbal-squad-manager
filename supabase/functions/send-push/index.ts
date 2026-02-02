@@ -60,6 +60,7 @@ Deno.serve(async (req) => {
     headings: { en: title },
     contents: { en: body },
     data: data ?? {},
+    target_channel: "push",
   };
 
   if (userIds && userIds.length > 0) {
@@ -80,8 +81,15 @@ Deno.serve(async (req) => {
 
   const responseBody = await response.json();
 
-  return new Response(JSON.stringify(responseBody), {
-    status: response.status,
-    headers: { ...corsHeaders, "Content-Type": "application/json" },
-  });
+  return new Response(
+    JSON.stringify({
+      ok: response.ok,
+      status: response.status,
+      response: responseBody,
+    }),
+    {
+      status: response.status,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    },
+  );
 });
