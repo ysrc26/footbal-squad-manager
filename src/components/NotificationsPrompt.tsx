@@ -38,7 +38,7 @@ export default function NotificationsPrompt() {
         await initOneSignal();
         if (!OneSignal.Notifications.isPushSupported()) return;
 
-        const permission = OneSignal.Notifications.permission;
+        const permission = String(OneSignal.Notifications.permission);
         const subscriptionId = OneSignal.User.PushSubscription?.id;
 
         if (subscriptionId) return;
