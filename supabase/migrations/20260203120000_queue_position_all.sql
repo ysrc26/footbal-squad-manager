@@ -1,20 +1,3 @@
--- Backfill queue_position for active + standby based on created_at
-with ordered as (
-  select
-    id,
-    row_number() over (partition by game_id order by created_at asc, id asc) as rn
-  from public.registrations
-  where status in ('active', 'standby')
-)
-update public.registrations r
-set queue_position = ordered.rn
-from ordered
-where r.id = ordered.id;
-
-update public.registrations
-set queue_position = null
-where status in ('cancelled', 'no_show');
-
 do $$
 begin
   if exists (
@@ -36,7 +19,28 @@ begin
     alter table public.registrations
       drop constraint registrations_standby_queue_position_not_null;
   end if;
+end;
+$$;
 
+-- Backfill queue_position for active + standby based on created_at
+with ordered as (
+  select
+    id,
+    row_number() over (partition by game_id order by created_at asc, id asc) as rn
+  from public.registrations
+  where status in ('active', 'standby')
+)
+update public.registrations r
+set queue_position = ordered.rn
+from ordered
+where r.id = ordered.id;
+
+update public.registrations
+set queue_position = null
+where status in ('cancelled', 'no_show');
+
+do $$
+begin
   if not exists (
     select 1
     from pg_constraint
