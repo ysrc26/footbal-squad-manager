@@ -5,6 +5,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
 import { Loader2, Calendar, Plus, Trash2, Users, Bot, FlaskConical, Wand2 } from 'lucide-react';
 import { CreateGameForm } from './CreateGameForm';
@@ -13,6 +14,23 @@ import type { Tables } from '@/lib/database.types';
 
 type Game = Tables<'games'>;
 
+type TestConfig = {
+  maxPlayers: number;
+  maxStandby: number;
+  activeCount: number;
+  standbyCount: number;
+  kickoffTime: string;
+  deadlineTime: string;
+};
+
+const TEST_STORAGE_KEY = 'admin_test_game_setup';
+
+const pad = (value: number) => String(value).padStart(2, '0');
+
+const toLocalInputValue = (date: Date) => {
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+};
+
 export function GameManagement() {
   const [games, setGames] = useState<Game[]>([]);
   const [loading, setLoading] = useState(true);
@@ -20,9 +38,41 @@ export function GameManagement() {
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [swapRunningId, setSwapRunningId] = useState<string | null>(null);
   const [swapResults, setSwapResults] = useState<Record<string, { count: number; users: string[] }>>({});
+  const [testGameId, setTestGameId] = useState<string | null>(null);
+  const [testProfileIds, setTestProfileIds] = useState<string[]>([]);
+  const [testBatchId, setTestBatchId] = useState<string | null>(null);
+  const [testCreating, setTestCreating] = useState(false);
+  const [testCleaning, setTestCleaning] = useState(false);
+  const [testConfig, setTestConfig] = useState<TestConfig>(() => {
+    const now = new Date();
+    const kickoff = new Date(now.getTime() + 10 * 60 * 1000);
+    const deadline = new Date(now.getTime() + 15 * 60 * 1000);
+    return {
+      maxPlayers: 2,
+      maxStandby: 4,
+      activeCount: 1,
+      standbyCount: 2,
+      kickoffTime: toLocalInputValue(kickoff),
+      deadlineTime: toLocalInputValue(deadline),
+    };
+  });
 
   useEffect(() => {
     fetchGames();
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const stored = window.localStorage.getItem(TEST_STORAGE_KEY);
+    if (!stored) return;
+    try {
+      const parsed = JSON.parse(stored);
+      if (parsed?.gameId) setTestGameId(parsed.gameId);
+      if (Array.isArray(parsed?.profileIds)) setTestProfileIds(parsed.profileIds);
+      if (parsed?.batchId) setTestBatchId(parsed.batchId);
+    } catch {
+      window.localStorage.removeItem(TEST_STORAGE_KEY);
+    }
   }, []);
 
   const fetchGames = async () => {
@@ -105,6 +155,196 @@ export function GameManagement() {
       toast.error('שגיאה בהרצת החלפות', { description: error.message });
     } finally {
       setSwapRunningId(null);
+    }
+  };
+
+  const updateTestConfig = (key: keyof TestConfig, value: string) => {
+    setTestConfig((prev) => ({
+      ...prev,
+      [key]: key.includes('Time') ? value : Number(value),
+    }));
+  };
+
+  const createTestGame = async () => {
+    const maxPlayers = Number(testConfig.maxPlayers);
+    const maxStandby = Number(testConfig.maxStandby);
+    const activeCount = Number(testConfig.activeCount);
+    const standbyCount = Number(testConfig.standbyCount);
+    const kickoffDate = new Date(testConfig.kickoffTime);
+    const deadlineDate = new Date(testConfig.deadlineTime);
+
+    if (maxPlayers <= 0 || maxStandby < 0) {
+      toast.error('יש להזין כמות שחקנים תקינה ומזמינים תקינה');
+      return;
+    }
+
+    if (activeCount < 0 || standbyCount < 0) {
+      toast.error('מספר שחקנים לא יכול להיות שלילי');
+      return;
+    }
+
+    if (activeCount > maxPlayers) {
+      toast.error('מספר השחקנים להרשמה לא יכול לעלות על max_players');
+      return;
+    }
+
+    if (standbyCount > maxStandby) {
+      toast.error('מספר המזמינים לא יכול לעלות על max_standby');
+      return;
+    }
+
+    if (Number.isNaN(kickoffDate.getTime()) || Number.isNaN(deadlineDate.getTime())) {
+      toast.error('זמני kickoff/deadline לא תקינים');
+      return;
+    }
+
+    if (kickoffDate >= deadlineDate) {
+      toast.error('kickoff_time חייב להיות לפני deadline_time');
+      return;
+    }
+
+    setTestCreating(true);
+    try {
+      const { data: game, error: gameError } = await supabase
+        .from('games')
+        .insert({
+          date: kickoffDate.toISOString().split('T')[0],
+          deadline_time: deadlineDate.toISOString(),
+          kickoff_time: kickoffDate.toISOString(),
+          status: 'open_for_all',
+          max_players: maxPlayers,
+          max_standby: maxStandby,
+          is_auto_generated: false,
+        })
+        .select('*')
+        .single();
+
+      if (gameError) throw gameError;
+
+      const totalProfiles = activeCount + standbyCount;
+      const batchId = crypto.randomUUID().slice(0, 8);
+      const profileIds: string[] = [];
+      const profiles = Array.from({ length: totalProfiles }, (_, index) => {
+        const id = crypto.randomUUID();
+        profileIds.push(id);
+        return {
+          id,
+          full_name: `TEST_${batchId}_${index + 1}`,
+          phone_number: null,
+          avatar_url: null,
+          is_resident: false,
+        };
+      });
+
+      if (profiles.length > 0) {
+        const { error: profileError } = await supabase
+          .from('profiles')
+          .insert(profiles);
+
+        if (profileError) throw profileError;
+      }
+
+      const registrations = [] as Array<Record<string, unknown>>;
+
+      for (let i = 0; i < activeCount; i += 1) {
+        registrations.push({
+          game_id: game.id,
+          user_id: profileIds[i],
+          status: 'active',
+          check_in_status: 'pending',
+          queue_position: null,
+        });
+      }
+
+      for (let i = 0; i < standbyCount; i += 1) {
+        registrations.push({
+          game_id: game.id,
+          user_id: profileIds[activeCount + i],
+          status: 'standby',
+          check_in_status: 'checked_in',
+          queue_position: i + 1,
+        });
+      }
+
+      if (registrations.length > 0) {
+        const { error: regError } = await supabase
+          .from('registrations')
+          .insert(registrations);
+
+        if (regError) throw regError;
+      }
+
+      setTestGameId(game.id);
+      setTestProfileIds(profileIds);
+      setTestBatchId(batchId);
+
+      if (typeof window !== 'undefined') {
+        window.localStorage.setItem(
+          TEST_STORAGE_KEY,
+          JSON.stringify({
+            gameId: game.id,
+            profileIds,
+            batchId,
+          })
+        );
+      }
+
+      toast.success('משחק טסט נוצר בהצלחה');
+      fetchGames();
+    } catch (error: any) {
+      toast.error('שגיאה ביצירת טסט', { description: error.message });
+    } finally {
+      setTestCreating(false);
+    }
+  };
+
+  const cleanupTestGame = async () => {
+    if (!testGameId && testProfileIds.length === 0) {
+      toast.error('לא נמצא משחק טסט לניקוי');
+      return;
+    }
+
+    setTestCleaning(true);
+    try {
+      if (testGameId) {
+        const { error: regError } = await supabase
+          .from('registrations')
+          .delete()
+          .eq('game_id', testGameId);
+
+        if (regError) throw regError;
+
+        const { error: gameError } = await supabase
+          .from('games')
+          .delete()
+          .eq('id', testGameId);
+
+        if (gameError) throw gameError;
+      }
+
+      if (testProfileIds.length > 0) {
+        const { error: profileError } = await supabase
+          .from('profiles')
+          .delete()
+          .in('id', testProfileIds);
+
+        if (profileError) throw profileError;
+      }
+
+      if (typeof window !== 'undefined') {
+        window.localStorage.removeItem(TEST_STORAGE_KEY);
+      }
+
+      setTestGameId(null);
+      setTestProfileIds([]);
+      setTestBatchId(null);
+
+      toast.success('טסט נוקה בהצלחה');
+      fetchGames();
+    } catch (error: any) {
+      toast.error('שגיאה בניקוי טסט', { description: error.message });
+    } finally {
+      setTestCleaning(false);
     }
   };
 
@@ -214,6 +454,102 @@ export function GameManagement() {
           onGameCreated={fetchGames}
         />
       )}
+
+      <Card className="glass">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <FlaskConical className="h-4 w-4 text-primary" />
+            פינת טסטים (אדמין)
+          </CardTitle>
+          <CardDescription>יוצר משחק טסט שמופיע במסך הבית ומדגים החלפות</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid gap-3 md:grid-cols-2">
+            <div className="space-y-1">
+              <p className="text-xs text-muted-foreground">max_players</p>
+              <Input
+                type="number"
+                min={1}
+                value={testConfig.maxPlayers}
+                onChange={(e) => updateTestConfig('maxPlayers', e.target.value)}
+              />
+            </div>
+            <div className="space-y-1">
+              <p className="text-xs text-muted-foreground">max_standby</p>
+              <Input
+                type="number"
+                min={0}
+                value={testConfig.maxStandby}
+                onChange={(e) => updateTestConfig('maxStandby', e.target.value)}
+              />
+            </div>
+            <div className="space-y-1">
+              <p className="text-xs text-muted-foreground">שחקנים פעילים ליצור</p>
+              <Input
+                type="number"
+                min={0}
+                value={testConfig.activeCount}
+                onChange={(e) => updateTestConfig('activeCount', e.target.value)}
+              />
+            </div>
+            <div className="space-y-1">
+              <p className="text-xs text-muted-foreground">מזמינים ליצור</p>
+              <Input
+                type="number"
+                min={0}
+                value={testConfig.standbyCount}
+                onChange={(e) => updateTestConfig('standbyCount', e.target.value)}
+              />
+            </div>
+            <div className="space-y-1">
+              <p className="text-xs text-muted-foreground">kickoff_time</p>
+              <Input
+                type="datetime-local"
+                value={testConfig.kickoffTime}
+                onChange={(e) => updateTestConfig('kickoffTime', e.target.value)}
+              />
+            </div>
+            <div className="space-y-1">
+              <p className="text-xs text-muted-foreground">deadline_time</p>
+              <Input
+                type="datetime-local"
+                value={testConfig.deadlineTime}
+                onChange={(e) => updateTestConfig('deadlineTime', e.target.value)}
+              />
+            </div>
+          </div>
+
+          {testGameId && (
+            <div className="rounded-lg border border-primary/20 bg-primary/5 p-3 text-xs text-muted-foreground">
+              <p>Game ID: {testGameId}</p>
+              {testBatchId && <p>Batch: {testBatchId}</p>}
+              {testProfileIds.length > 0 && <p>Profiles: {testProfileIds.length}</p>}
+            </div>
+          )}
+
+          <div className="flex flex-col gap-2 md:flex-row">
+            <Button onClick={createTestGame} disabled={testCreating} className="w-full">
+              {testCreating ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                'צור משחק טסט'
+              )}
+            </Button>
+            <Button
+              variant="outline"
+              onClick={cleanupTestGame}
+              disabled={testCleaning}
+              className="w-full"
+            >
+              {testCleaning ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                'נקה משחק טסט'
+              )}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
 
       <Card className="glass">
         <CardHeader>
