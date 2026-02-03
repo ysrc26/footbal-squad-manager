@@ -199,53 +199,14 @@ export function GameRegistration() {
   };
 
   const canCheckIn = (): { allowed: boolean; message: string } => {
-    if (!currentGame?.kickoff_time) {
-      return { allowed: false, message: 'זמן המשחק לא מוגדר' };
+    if (!currentGame) {
+      return { allowed: false, message: 'אין משחק פעיל' };
     }
-    
-    const kickoff = new Date(currentGame.kickoff_time);
-    const now = new Date();
-    const minutesUntilKickoff = (kickoff.getTime() - now.getTime()) / (1000 * 60);
-    
-    // Check-in opens 20 minutes before kickoff
-    if (minutesUntilKickoff > 20) {
-      const totalMinutes = minutesUntilKickoff;
-      const days = Math.floor(totalMinutes / (60 * 24));
-      const hours = Math.floor((totalMinutes % (60 * 24)) / 60);
-      const mins = Math.round(totalMinutes % 60);
-      
-      let timeStr = '';
-      if (days > 0) {
-        timeStr = `${days} ${days === 1 ? 'יום' : 'ימים'}`;
-        if (hours > 0) timeStr += `, ${hours} ${hours === 1 ? 'שעה' : 'שעות'}`;
-        if (mins > 0) timeStr += ` ו-${mins} דקות`;
-      } else if (hours > 0) {
-        timeStr = `${hours} ${hours === 1 ? 'שעה' : 'שעות'} ו-${mins} דקות`;
-      } else {
-        timeStr = `${mins} דקות`;
-      }
-      
-      return { 
-        allowed: false, 
-        message: `צ'ק-אין ייפתח בעוד ${timeStr}` 
-      };
+
+    if (currentGame.status === 'cancelled') {
+      return { allowed: false, message: 'המשחק בוטל' };
     }
-    
-    // For auto-generated games: check-in closes at midnight after Shabbat
-    if (currentGame.is_auto_generated) {
-      const gameDate = new Date(currentGame.date);
-      // Midnight after the game date (Sunday 00:00)
-      const midnight = new Date(gameDate);
-      midnight.setDate(midnight.getDate() + 1);
-      midnight.setHours(0, 0, 0, 0);
-      
-      if (now > midnight) {
-        return { allowed: false, message: 'זמן הצ\'ק-אין הסתיים' };
-      }
-    }
-    // For manual games: check-in is always open until game is deleted
-    // (no additional closing condition needed)
-    
+
     return { allowed: true, message: 'סרוק QR לצ\'ק-אין' };
   };
 
@@ -458,8 +419,8 @@ export function GameRegistration() {
             </Button>
           ) : (
             <div className="space-y-2">
-              {/* QR Scanner for Check-in - Only for registered active players who haven't checked in */}
-              {userRegistration.status === 'active' && !isCheckedIn && (
+              {/* QR Scanner for Check-in - Available for any registered player who hasn't checked in */}
+              {!isCheckedIn && (
                 checkInStatus.allowed ? (
                   <QrScanner gameId={currentGame.id} onCheckInSuccess={fetchRegistrations} />
                 ) : (
