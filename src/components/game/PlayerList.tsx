@@ -62,11 +62,21 @@ export function PlayerList({ title, players, maxPlayers, showPosition, emptyMess
                     {registration.full_name || 'שחקן אנונימי'}
                   </span>
                 </div>
-                {registration.check_in_status === 'checked_in' && (
-                  <Badge className="bg-green-500/20 text-green-500 border-green-500/50 text-xs">
-                    <CheckCircle2 className="h-3 w-3 ml-1" />
-                    צ&apos;ק-אין
-                  </Badge>
+                {(registration.check_in_status === 'checked_in' ||
+                  (registration.eta_minutes ?? 0) > 0) && (
+                  <div className="flex items-center gap-2">
+                    {registration.check_in_status === 'checked_in' && (
+                      <Badge className="bg-green-500/20 text-green-500 border-green-500/50 text-xs">
+                        <CheckCircle2 className="h-3 w-3 ml-1" />
+                        צ&apos;ק-אין
+                      </Badge>
+                    )}
+                    {(registration.eta_minutes ?? 0) > 0 && (
+                      <Badge className="bg-red-500/20 text-red-500 border-red-500/50 text-xs">
+                        מאחר {registration.eta_minutes}ד&apos;
+                      </Badge>
+                    )}
+                  </div>
                 )}
               </div>
             ))}

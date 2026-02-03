@@ -123,6 +123,7 @@ serve(async (req) => {
   }
 
   const update: Record<string, unknown> = {};
+  const shouldPromote = payload.action === "cancel" && registration.status === "active";
 
   switch (payload.action) {
     case "checkin_on":
@@ -135,6 +136,7 @@ serve(async (req) => {
       update.status = "cancelled";
       update.check_in_status = "pending";
       update.queue_position = null;
+      update.eta_minutes = null;
       break;
     case "late_set":
       if (payload.eta_minutes === null || payload.eta_minutes === undefined) {
@@ -161,6 +163,55 @@ serve(async (req) => {
 
   if (updateError) {
     return jsonResponse({ error: updateError.message }, 500);
+  }
+
+  if (shouldPromote) {
+    const { data: game, error: gameError } = await supabaseAdmin
+      .from("games")
+      .select("deadline_time")
+      .eq("id", payload.game_id)
+      .maybeSingle();
+
+    if (gameError) {
+      return jsonResponse({ error: gameError.message }, 500);
+    }
+
+    const deadlineTime = game?.deadline_time ? new Date(game.deadline_time) : null;
+    const afterDeadline = deadlineTime ? new Date() >= deadlineTime : false;
+
+    let standbyQuery = supabaseAdmin
+      .from("registrations")
+      .select("id, user_id")
+      .eq("game_id", payload.game_id)
+      .eq("status", "standby");
+
+    if (afterDeadline) {
+      standbyQuery = standbyQuery.eq("check_in_status", "checked_in");
+    }
+
+    const { data: standby, error: standbyError } = await standbyQuery
+      .order("queue_position", { ascending: true })
+      .limit(1)
+      .maybeSingle();
+
+    if (standbyError) {
+      return jsonResponse({ error: standbyError.message }, 500);
+    }
+
+    if (standby) {
+      const { error: promoteError } = await supabaseAdmin
+        .from("registrations")
+        .update({
+          status: "active",
+          queue_position: null,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", standby.id);
+
+      if (promoteError) {
+        return jsonResponse({ error: promoteError.message }, 500);
+      }
+    }
   }
 
   return jsonResponse({ registration: updated });

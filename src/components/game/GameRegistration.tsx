@@ -54,7 +54,7 @@ export function GameRegistration() {
   };
 
   const fetchRegistrations = useCallback(async () => {
-    if (!currentGame || !user) return;
+    if (!currentGame) return;
 
     try {
       // Step 1: Fetch registrations without JOIN
@@ -97,7 +97,7 @@ export function GameRegistration() {
       }));
 
       setRegistrations(mergedRegistrations);
-      const myReg = mergedRegistrations.find((r) => r.user_id === user.id) || null;
+      const myReg = user ? mergedRegistrations.find((r) => r.user_id === user.id) || null : null;
       setUserRegistration(myReg);
     } catch (error: any) {
       console.error('Error fetching registrations:', error);
@@ -419,6 +419,11 @@ export function GameRegistration() {
                   {isCheckedIn && (
                     <Badge className="mt-1 bg-green-500/20 text-green-500 border-green-500/50">
                       ✓ עשית צ&apos;ק-אין
+                    </Badge>
+                  )}
+                  {userRegistration.eta_minutes && userRegistration.eta_minutes > 0 && (
+                    <Badge className="mt-1 bg-red-500/20 text-red-500 border-red-500/50">
+                      מאחר {userRegistration.eta_minutes}ד&apos;
                     </Badge>
                   )}
                 </div>
