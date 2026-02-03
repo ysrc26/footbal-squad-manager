@@ -90,30 +90,44 @@ serve(async (req) => {
     return jsonResponse({ error: "game_id is required" }, 400);
   }
 
-  const { data, error } = await supabaseAdmin
+  const { data: registrationsData, error: registrationsError } = await supabaseAdmin
     .from("registrations")
-    .select(
-      "id, user_id, status, check_in_status, eta_minutes, queue_position, created_at, updated_at, profiles:profiles!inner(full_name)"
-    )
+    .select("id, user_id, status, check_in_status, eta_minutes, queue_position, created_at, updated_at")
     .eq("game_id", payload.game_id)
-    .like("profiles.full_name", "TEST_%")
     .order("created_at", { ascending: true });
 
-  if (error) {
-    return jsonResponse({ error: error.message }, 500);
+  if (registrationsError) {
+    return jsonResponse({ error: registrationsError.message }, 500);
   }
 
-  const registrations = (data ?? []).map((row: any) => ({
-    id: row.id,
-    user_id: row.user_id,
-    full_name: row.profiles?.full_name ?? null,
-    status: row.status,
-    check_in_status: row.check_in_status,
-    eta_minutes: row.eta_minutes,
-    queue_position: row.queue_position,
-    created_at: row.created_at,
-    updated_at: row.updated_at,
-  }));
+  const userIds = Array.from(new Set((registrationsData ?? []).map((row) => row.user_id)));
+
+  const { data: profilesData, error: profilesError } = await supabaseAdmin
+    .from("profiles")
+    .select("id, full_name")
+    .in("id", userIds.length > 0 ? userIds : ["00000000-0000-0000-0000-000000000000"]);
+
+  if (profilesError) {
+    return jsonResponse({ error: profilesError.message }, 500);
+  }
+
+  const profilesMap = new Map(
+    (profilesData ?? []).map((profile) => [profile.id, profile.full_name])
+  );
+
+  const registrations = (registrationsData ?? [])
+    .map((row: any) => ({
+      id: row.id,
+      user_id: row.user_id,
+      full_name: profilesMap.get(row.user_id) ?? null,
+      status: row.status,
+      check_in_status: row.check_in_status,
+      eta_minutes: row.eta_minutes,
+      queue_position: row.queue_position,
+      created_at: row.created_at,
+      updated_at: row.updated_at,
+    }))
+    .filter((row) => row.full_name?.startsWith("TEST_"));
 
   return jsonResponse({ registrations });
 });
