@@ -39,7 +39,7 @@ export function GameManagement() {
   const [swapRunningId, setSwapRunningId] = useState<string | null>(null);
   const [swapResults, setSwapResults] = useState<Record<string, { count: number; users: string[] }>>({});
   const [testGameId, setTestGameId] = useState<string | null>(null);
-  const [testProfileIds, setTestProfileIds] = useState<string[]>([]);
+  const [testUserIds, setTestUserIds] = useState<string[]>([]);
   const [testBatchId, setTestBatchId] = useState<string | null>(null);
   const [testCreating, setTestCreating] = useState(false);
   const [testCleaning, setTestCleaning] = useState(false);
@@ -68,7 +68,11 @@ export function GameManagement() {
     try {
       const parsed = JSON.parse(stored);
       if (parsed?.gameId) setTestGameId(parsed.gameId);
-      if (Array.isArray(parsed?.profileIds)) setTestProfileIds(parsed.profileIds);
+      if (Array.isArray(parsed?.userIds)) {
+        setTestUserIds(parsed.userIds);
+      } else if (Array.isArray(parsed?.profileIds)) {
+        setTestUserIds(parsed.profileIds);
+      }
       if (parsed?.batchId) setTestBatchId(parsed.batchId);
     } catch {
       window.localStorage.removeItem(TEST_STORAGE_KEY);
@@ -206,14 +210,16 @@ export function GameManagement() {
     setTestCreating(true);
     try {
       const batchId = crypto.randomUUID().slice(0, 8);
-      const { data, error } = await supabase.rpc('admin_create_test_game', {
-        _kickoff_time: kickoffDate.toISOString(),
-        _deadline_time: deadlineDate.toISOString(),
-        _max_players: maxPlayers,
-        _max_standby: maxStandby,
-        _active_count: activeCount,
-        _standby_count: standbyCount,
-        _batch_id: batchId,
+      const { data, error } = await supabase.functions.invoke('admin-test-game-create', {
+        body: {
+          kickoff_time: kickoffDate.toISOString(),
+          deadline_time: deadlineDate.toISOString(),
+          max_players: maxPlayers,
+          max_standby: maxStandby,
+          active_count: activeCount,
+          standby_count: standbyCount,
+          batch_id: batchId,
+        },
       });
 
       if (error) throw error;
@@ -224,7 +230,7 @@ export function GameManagement() {
       }
 
       setTestGameId(result.game_id);
-      setTestProfileIds(result.profile_ids || []);
+      setTestUserIds(result.user_ids || []);
       setTestBatchId(batchId);
 
       if (typeof window !== 'undefined') {
@@ -232,7 +238,7 @@ export function GameManagement() {
           TEST_STORAGE_KEY,
           JSON.stringify({
             gameId: result.game_id,
-            profileIds: result.profile_ids || [],
+            userIds: result.user_ids || [],
             batchId,
           })
         );
@@ -248,16 +254,18 @@ export function GameManagement() {
   };
 
   const cleanupTestGame = async () => {
-    if (!testGameId && testProfileIds.length === 0) {
+    if (!testGameId && testUserIds.length === 0) {
       toast.error('לא נמצא משחק טסט לניקוי');
       return;
     }
 
     setTestCleaning(true);
     try {
-      const { error } = await supabase.rpc('admin_cleanup_test_game', {
-        _game_id: testGameId,
-        _profile_ids: testProfileIds,
+      const { error } = await supabase.functions.invoke('admin-test-game-cleanup', {
+        body: {
+          game_id: testGameId,
+          user_ids: testUserIds,
+        },
       });
 
       if (error) throw error;
@@ -267,7 +275,7 @@ export function GameManagement() {
       }
 
       setTestGameId(null);
-      setTestProfileIds([]);
+      setTestUserIds([]);
       setTestBatchId(null);
 
       toast.success('טסט נוקה בהצלחה');
@@ -454,7 +462,7 @@ export function GameManagement() {
             <div className="rounded-lg border border-primary/20 bg-primary/5 p-3 text-xs text-muted-foreground">
               <p>Game ID: {testGameId}</p>
               {testBatchId && <p>Batch: {testBatchId}</p>}
-              {testProfileIds.length > 0 && <p>Profiles: {testProfileIds.length}</p>}
+              {testUserIds.length > 0 && <p>Test Users: {testUserIds.length}</p>}
             </div>
           )}
 
