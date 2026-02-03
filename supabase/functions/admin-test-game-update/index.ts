@@ -95,7 +95,7 @@ serve(async (req) => {
 
   const { data: registration, error: fetchError } = await supabaseAdmin
     .from("registrations")
-    .select("id, user_id, status, check_in_status, eta_minutes, queue_position, profiles:profiles!inner(full_name)")
+    .select("id, user_id, status, check_in_status, eta_minutes, queue_position")
     .eq("game_id", payload.game_id)
     .eq("user_id", payload.user_id)
     .maybeSingle();
@@ -104,7 +104,21 @@ serve(async (req) => {
     return jsonResponse({ error: fetchError.message }, 500);
   }
 
-  if (!registration || !registration.profiles?.full_name?.startsWith("TEST_")) {
+  if (!registration) {
+    return jsonResponse({ error: "Registration not found" }, 404);
+  }
+
+  const { data: profile, error: profileError } = await supabaseAdmin
+    .from("profiles")
+    .select("full_name")
+    .eq("id", registration.user_id)
+    .maybeSingle();
+
+  if (profileError) {
+    return jsonResponse({ error: profileError.message }, 500);
+  }
+
+  if (!profile?.full_name?.startsWith("TEST_")) {
     return jsonResponse({ error: "Test player not found" }, 404);
   }
 
