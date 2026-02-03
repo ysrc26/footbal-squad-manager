@@ -218,6 +218,28 @@ export interface Database {
           swaps: Json
         }[]
       }
+      admin_create_test_game: {
+        Args: {
+          _kickoff_time: string
+          _deadline_time: string
+          _max_players: number
+          _max_standby: number
+          _active_count: number
+          _standby_count: number
+          _batch_id: string
+        }
+        Returns: {
+          game_id: string
+          profile_ids: string[]
+        }[]
+      }
+      admin_cleanup_test_game: {
+        Args: {
+          _game_id: string | null
+          _profile_ids: string[] | null
+        }
+        Returns: null
+      }
     }
     Enums: {
       app_role: AppRole

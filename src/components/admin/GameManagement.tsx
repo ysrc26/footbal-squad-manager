@@ -205,85 +205,34 @@ export function GameManagement() {
 
     setTestCreating(true);
     try {
-      const { data: game, error: gameError } = await supabase
-        .from('games')
-        .insert({
-          date: kickoffDate.toISOString().split('T')[0],
-          deadline_time: deadlineDate.toISOString(),
-          kickoff_time: kickoffDate.toISOString(),
-          status: 'open_for_all',
-          max_players: maxPlayers,
-          max_standby: maxStandby,
-          is_auto_generated: false,
-        })
-        .select('*')
-        .single();
-
-      if (gameError) throw gameError;
-
-      const totalProfiles = activeCount + standbyCount;
       const batchId = crypto.randomUUID().slice(0, 8);
-      const profileIds: string[] = [];
-      const profiles = Array.from({ length: totalProfiles }, (_, index) => {
-        const id = crypto.randomUUID();
-        profileIds.push(id);
-        return {
-          id,
-          full_name: `TEST_${batchId}_${index + 1}`,
-          phone_number: null,
-          avatar_url: null,
-          is_resident: false,
-        };
+      const { data, error } = await supabase.rpc('admin_create_test_game', {
+        _kickoff_time: kickoffDate.toISOString(),
+        _deadline_time: deadlineDate.toISOString(),
+        _max_players: maxPlayers,
+        _max_standby: maxStandby,
+        _active_count: activeCount,
+        _standby_count: standbyCount,
+        _batch_id: batchId,
       });
 
-      if (profiles.length > 0) {
-        const { error: profileError } = await supabase
-          .from('profiles')
-          .insert(profiles);
+      if (error) throw error;
 
-        if (profileError) throw profileError;
+      const result = Array.isArray(data) ? data[0] : data;
+      if (!result?.game_id) {
+        throw new Error('תוצאת טסט לא תקינה');
       }
 
-      const registrations = [] as Array<Record<string, unknown>>;
-
-      for (let i = 0; i < activeCount; i += 1) {
-        registrations.push({
-          game_id: game.id,
-          user_id: profileIds[i],
-          status: 'active',
-          check_in_status: 'pending',
-          queue_position: null,
-        });
-      }
-
-      for (let i = 0; i < standbyCount; i += 1) {
-        registrations.push({
-          game_id: game.id,
-          user_id: profileIds[activeCount + i],
-          status: 'standby',
-          check_in_status: 'checked_in',
-          queue_position: i + 1,
-        });
-      }
-
-      if (registrations.length > 0) {
-        const { error: regError } = await supabase
-          .from('registrations')
-          .insert(registrations);
-
-        if (regError) throw regError;
-      }
-
-      setTestGameId(game.id);
-      setTestProfileIds(profileIds);
+      setTestGameId(result.game_id);
+      setTestProfileIds(result.profile_ids || []);
       setTestBatchId(batchId);
 
       if (typeof window !== 'undefined') {
         window.localStorage.setItem(
           TEST_STORAGE_KEY,
           JSON.stringify({
-            gameId: game.id,
-            profileIds,
+            gameId: result.game_id,
+            profileIds: result.profile_ids || [],
             batchId,
           })
         );
@@ -306,30 +255,12 @@ export function GameManagement() {
 
     setTestCleaning(true);
     try {
-      if (testGameId) {
-        const { error: regError } = await supabase
-          .from('registrations')
-          .delete()
-          .eq('game_id', testGameId);
+      const { error } = await supabase.rpc('admin_cleanup_test_game', {
+        _game_id: testGameId,
+        _profile_ids: testProfileIds,
+      });
 
-        if (regError) throw regError;
-
-        const { error: gameError } = await supabase
-          .from('games')
-          .delete()
-          .eq('id', testGameId);
-
-        if (gameError) throw gameError;
-      }
-
-      if (testProfileIds.length > 0) {
-        const { error: profileError } = await supabase
-          .from('profiles')
-          .delete()
-          .in('id', testProfileIds);
-
-        if (profileError) throw profileError;
-      }
+      if (error) throw error;
 
       if (typeof window !== 'undefined') {
         window.localStorage.removeItem(TEST_STORAGE_KEY);
