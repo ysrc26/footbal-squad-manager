@@ -192,7 +192,10 @@ serve(async (req) => {
     }));
 
     if (profiles.length > 0) {
-      const { error: profileError } = await supabaseAdmin.from("profiles").insert(profiles);
+      const { error: profileError } = await supabaseAdmin
+        .from("profiles")
+        .upsert(profiles, { onConflict: "id" });
+
       if (profileError) throw profileError;
     }
 
