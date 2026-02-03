@@ -29,8 +29,10 @@ export function GameRegistration() {
   const [loading, setLoading] = useState(true);
   const [registering, setRegistering] = useState(false);
 
-  // Use dynamic max_players from game or fallback to default
-  const maxPlayers = currentGame?.max_players ?? DEFAULT_MAX_PLAYERS;
+  const maxPlayersRaw = currentGame?.max_players ?? DEFAULT_MAX_PLAYERS;
+  const maxStandbyRaw = currentGame?.max_standby ?? 0;
+  // Active capacity = total max minus standby (matches register_for_game logic)
+  const maxPlayers = Math.max(0, maxPlayersRaw - maxStandbyRaw);
 
   const fetchCurrentGame = async () => {
     try {
