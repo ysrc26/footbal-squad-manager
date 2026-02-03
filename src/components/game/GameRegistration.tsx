@@ -63,6 +63,7 @@ export function GameRegistration() {
         .select('*')
         .eq('game_id', currentGame.id)
         .neq('status', 'cancelled')
+        .order('queue_position', { ascending: true, nullsFirst: false })
         .order('created_at', { ascending: true });
 
       if (regsError) throw regsError;
@@ -332,7 +333,15 @@ export function GameRegistration() {
     return value.slice(0, 5);
   };
 
-  const activeRegistrations = registrations.filter((r) => r.status === 'active');
+  const activeRegistrations = registrations
+    .filter((r) => r.status === 'active')
+    .slice()
+    .sort((a, b) => {
+      const aPos = a.queue_position ?? Number.MAX_SAFE_INTEGER;
+      const bPos = b.queue_position ?? Number.MAX_SAFE_INTEGER;
+      if (aPos !== bPos) return aPos - bPos;
+      return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+    });
   const standbyRegistrations = registrations
     .filter((r) => r.status === 'standby')
     .slice()
@@ -409,13 +418,11 @@ export function GameRegistration() {
                   <p className="font-medium text-primary">
                     {userRegistration.status === 'active' ? 'אתה רשום למשחק!' : 'אתה ברשימת ההמתנה'}
                   </p>
-                  {userRegistration.status === 'standby' && (
-                    <p className="text-xs text-muted-foreground">
-                      מיקום בתור:{' '}
-                      {userRegistration.queue_position ??
-                        standbyRegistrations.findIndex((r) => r.id === userRegistration.id) + 1}
-                    </p>
-                  )}
+                  <p className="text-xs text-muted-foreground">
+                    מיקום בתור:{' '}
+                    {userRegistration.queue_position ??
+                      registrations.findIndex((r) => r.id === userRegistration.id) + 1}
+                  </p>
                   {isCheckedIn && (
                     <Badge className="mt-1 bg-green-500/20 text-green-500 border-green-500/50">
                       ✓ עשית צ&apos;ק-אין
@@ -489,6 +496,7 @@ export function GameRegistration() {
         title="שחקנים רשומים"
         players={activeRegistrations}
         maxPlayers={maxPlayers}
+        showPosition
         emptyMessage="אין שחקנים רשומים עדיין"
       />
 

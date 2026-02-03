@@ -218,7 +218,7 @@ serve(async (req) => {
         user_id: createdUserIds[i],
         status: "active",
         check_in_status: "pending",
-        queue_position: null,
+        queue_position: i + 1,
         created_at: createdAt,
         updated_at: createdAt,
       });
@@ -232,7 +232,7 @@ serve(async (req) => {
         user_id: createdUserIds[payload.active_count + i],
         status: "standby",
         check_in_status: "checked_in",
-        queue_position: i + 1,
+        queue_position: payload.active_count + i + 1,
         created_at: createdAt,
         updated_at: createdAt,
       });

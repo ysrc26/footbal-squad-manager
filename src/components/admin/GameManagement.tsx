@@ -194,7 +194,14 @@ export function GameManagement() {
       if (error) throw error;
 
       const registrations = Array.isArray(data?.registrations) ? data.registrations : [];
-      setTestPlayers(registrations);
+      setTestPlayers(
+        registrations.slice().sort((a: TestRegistration, b: TestRegistration) => {
+          const aPos = a.queue_position ?? Number.MAX_SAFE_INTEGER;
+          const bPos = b.queue_position ?? Number.MAX_SAFE_INTEGER;
+          if (aPos !== bPos) return aPos - bPos;
+          return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+        })
+      );
     } catch (error: any) {
       toast.error('שגיאה בטעינת שחקני טסט', { description: error.message });
     } finally {
