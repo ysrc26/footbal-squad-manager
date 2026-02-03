@@ -143,8 +143,10 @@ serve(async (req) => {
 
   let gameId: string | null = null;
   let profileIds: string[] = [];
+  let step = "init";
 
   try {
+    step = "create_game";
     const { data: game, error: gameError } = await supabaseAdmin
       .from("games")
       .insert({
@@ -162,6 +164,7 @@ serve(async (req) => {
     if (gameError) throw gameError;
     gameId = game.id as string;
 
+    step = "create_auth_users";
     for (let i = 0; i < totalUsers; i += 1) {
       const email = `test_${payload.batch_id}_${i + 1}@example.com`;
       const password = crypto.randomUUID();
@@ -179,6 +182,7 @@ serve(async (req) => {
       createdUserIds.push(userData.user.id);
     }
 
+    step = "create_profiles";
     const profiles = createdUserIds.map((id, index) => ({
       id,
       full_name: `TEST_${payload.batch_id}_${index + 1}`,
@@ -194,26 +198,42 @@ serve(async (req) => {
 
     profileIds = [...createdUserIds];
 
+    step = "create_registrations";
     const registrations: Record<string, unknown>[] = [];
+    let currentTimeMs = Date.now();
+
+    const nextGapMs = () => {
+      const minSeconds = 2;
+      const maxSeconds = 8;
+      return (minSeconds + Math.floor(Math.random() * (maxSeconds - minSeconds + 1))) * 1000;
+    };
 
     for (let i = 0; i < payload.active_count; i += 1) {
+      const createdAt = new Date(currentTimeMs).toISOString();
       registrations.push({
         game_id: gameId,
         user_id: createdUserIds[i],
         status: "active",
         check_in_status: "pending",
         queue_position: null,
+        created_at: createdAt,
+        updated_at: createdAt,
       });
+      currentTimeMs += nextGapMs();
     }
 
     for (let i = 0; i < payload.standby_count; i += 1) {
+      const createdAt = new Date(currentTimeMs).toISOString();
       registrations.push({
         game_id: gameId,
         user_id: createdUserIds[payload.active_count + i],
         status: "standby",
         check_in_status: "checked_in",
         queue_position: i + 1,
+        created_at: createdAt,
+        updated_at: createdAt,
       });
+      currentTimeMs += nextGapMs();
     }
 
     if (registrations.length > 0) {
@@ -223,6 +243,7 @@ serve(async (req) => {
 
     return jsonResponse({ game_id: gameId, user_ids: createdUserIds, profile_ids: profileIds });
   } catch (error) {
+    console.error("admin-test-game-create failed", { step, error });
     if (gameId) {
       await supabaseAdmin.from("registrations").delete().eq("game_id", gameId);
       await supabaseAdmin.from("games").delete().eq("id", gameId);
@@ -237,6 +258,6 @@ serve(async (req) => {
     }
 
     const message = error instanceof Error ? error.message : "Failed to create test game";
-    return jsonResponse({ error: message }, 500);
+    return jsonResponse({ error: message, step }, 500);
   }
 });

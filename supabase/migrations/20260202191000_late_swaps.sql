@@ -173,11 +173,11 @@ begin
     if v_deadline is not null and now() >= v_deadline then
       loop
         select * into v_late
-        from public.registrations
-        where game_id = _game_id
-          and status = 'active'
-          and check_in_status is distinct from 'checked_in'
-        order by created_at asc
+        from public.registrations r
+        where r.game_id = _game_id
+          and r.status = 'active'
+          and r.check_in_status is distinct from 'checked_in'
+        order by r.created_at desc, r.id desc
         limit 1
         for update;
 

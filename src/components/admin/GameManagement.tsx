@@ -45,13 +45,13 @@ export function GameManagement() {
   const [testCleaning, setTestCleaning] = useState(false);
   const [testConfig, setTestConfig] = useState<TestConfig>(() => {
     const now = new Date();
-    const kickoff = new Date(now.getTime() + 10 * 60 * 1000);
-    const deadline = new Date(now.getTime() + 15 * 60 * 1000);
+    const kickoff = new Date(now.getTime() + 1 * 60 * 1000);
+    const deadline = new Date(now.getTime() + 2 * 60 * 1000);
     return {
-      maxPlayers: 2,
-      maxStandby: 4,
-      activeCount: 1,
-      standbyCount: 2,
+      maxPlayers: 20,
+      maxStandby: 5,
+      activeCount: 15,
+      standbyCount: 5,
       kickoffTime: toLocalInputValue(kickoff),
       deadlineTime: toLocalInputValue(deadline),
     };
