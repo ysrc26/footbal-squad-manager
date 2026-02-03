@@ -23,6 +23,18 @@ type TestConfig = {
   deadlineTime: string;
 };
 
+type TestRegistration = {
+  id: string;
+  user_id: string;
+  full_name: string | null;
+  status: string;
+  check_in_status: string;
+  eta_minutes: number | null;
+  queue_position: number | null;
+  created_at: string;
+  updated_at: string;
+};
+
 const TEST_STORAGE_KEY = 'admin_test_game_setup';
 
 const pad = (value: number) => String(value).padStart(2, '0');
@@ -43,6 +55,10 @@ export function GameManagement() {
   const [testBatchId, setTestBatchId] = useState<string | null>(null);
   const [testCreating, setTestCreating] = useState(false);
   const [testCleaning, setTestCleaning] = useState(false);
+  const [testPlayers, setTestPlayers] = useState<TestRegistration[]>([]);
+  const [testPlayersLoading, setTestPlayersLoading] = useState(false);
+  const [testActionLoading, setTestActionLoading] = useState<Record<string, boolean>>({});
+  const [testLateMinutes, setTestLateMinutes] = useState<Record<string, string>>({});
   const [testConfig, setTestConfig] = useState<TestConfig>(() => {
     const now = new Date();
     const kickoff = new Date(now.getTime() + 1 * 60 * 1000);
@@ -78,6 +94,11 @@ export function GameManagement() {
       window.localStorage.removeItem(TEST_STORAGE_KEY);
     }
   }, []);
+
+  useEffect(() => {
+    if (!testGameId) return;
+    fetchTestPlayers();
+  }, [testGameId]);
 
   const fetchGames = async () => {
     try {
@@ -160,6 +181,59 @@ export function GameManagement() {
     } finally {
       setSwapRunningId(null);
     }
+  };
+
+  const fetchTestPlayers = async () => {
+    if (!testGameId) return;
+    setTestPlayersLoading(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('admin-test-game-list', {
+        body: { game_id: testGameId },
+      });
+
+      if (error) throw error;
+
+      const registrations = Array.isArray(data?.registrations) ? data.registrations : [];
+      setTestPlayers(registrations);
+    } catch (error: any) {
+      toast.error('שגיאה בטעינת שחקני טסט', { description: error.message });
+    } finally {
+      setTestPlayersLoading(false);
+    }
+  };
+
+  const updateTestPlayer = async (
+    registration: TestRegistration,
+    action: 'checkin_on' | 'checkin_off' | 'cancel' | 'late_set' | 'late_clear'
+  ) => {
+    if (!testGameId) return;
+    setTestActionLoading((prev) => ({ ...prev, [registration.id]: true }));
+    try {
+      const etaValue =
+        action === 'late_set' ? Number(testLateMinutes[registration.id] ?? 0) : undefined;
+      const { error } = await supabase.functions.invoke('admin-test-game-update', {
+        body: {
+          game_id: testGameId,
+          user_id: registration.user_id,
+          action,
+          eta_minutes: action === 'late_set' ? etaValue : undefined,
+        },
+      });
+
+      if (error) throw error;
+
+      await fetchTestPlayers();
+    } catch (error: any) {
+      toast.error('שגיאה בעדכון שחקן טסט', { description: error.message });
+    } finally {
+      setTestActionLoading((prev) => ({ ...prev, [registration.id]: false }));
+    }
+  };
+
+  const formatDateTime = (value: string) => {
+    if (!value) return '';
+    const d = new Date(value);
+    return d.toLocaleString('he-IL', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
   };
 
   const updateTestConfig = (key: keyof TestConfig, value: string) => {
@@ -246,6 +320,7 @@ export function GameManagement() {
 
       toast.success('משחק טסט נוצר בהצלחה');
       fetchGames();
+      fetchTestPlayers();
     } catch (error: any) {
       toast.error('שגיאה ביצירת טסט', { description: error.message });
     } finally {
@@ -280,6 +355,7 @@ export function GameManagement() {
 
       toast.success('טסט נוקה בהצלחה');
       fetchGames();
+      setTestPlayers([]);
     } catch (error: any) {
       toast.error('שגיאה בניקוי טסט', { description: error.message });
     } finally {
@@ -487,6 +563,107 @@ export function GameManagement() {
               )}
             </Button>
           </div>
+
+          {testGameId && (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <p className="text-sm font-medium">שחקני טסט</p>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={fetchTestPlayers}
+                  disabled={testPlayersLoading}
+                >
+                  {testPlayersLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : 'רענן'}
+                </Button>
+              </div>
+
+              {testPlayers.length === 0 ? (
+                <p className="text-xs text-muted-foreground">אין שחקני טסט להצגה</p>
+              ) : (
+                <div className="space-y-2">
+                  {testPlayers.map((player) => (
+                    <div
+                      key={player.id}
+                      className="flex flex-col gap-2 rounded-lg border border-secondary/40 bg-secondary/20 p-3 text-xs"
+                    >
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div className="font-medium">{player.full_name ?? player.user_id}</div>
+                        <div className="flex items-center gap-2">
+                          <Badge variant="outline">{player.status}</Badge>
+                          <Badge variant="secondary">{player.check_in_status}</Badge>
+                          {player.queue_position && (
+                            <Badge variant="outline">#{player.queue_position}</Badge>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-3 text-muted-foreground">
+                        <span>ETA: {player.eta_minutes ?? '—'}</span>
+                        {player.eta_minutes && player.eta_minutes > 0 && (
+                          <Badge variant="destructive">מאחר {player.eta_minutes}ד׳</Badge>
+                        )}
+                        <span>נוצר: {formatDateTime(player.created_at)}</span>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Button
+                          size="sm"
+                          variant={player.check_in_status === 'checked_in' ? 'secondary' : 'default'}
+                          disabled={testActionLoading[player.id]}
+                          onClick={() =>
+                            updateTestPlayer(
+                              player,
+                              player.check_in_status === 'checked_in' ? 'checkin_off' : 'checkin_on'
+                            )
+                          }
+                        >
+                          {player.check_in_status === 'checked_in' ? 'בטל צ׳ק-אין' : 'צ׳ק-אין'}
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={testActionLoading[player.id] || player.status === 'cancelled'}
+                          onClick={() => updateTestPlayer(player, 'cancel')}
+                        >
+                          בטל הרשמה
+                        </Button>
+                        <div className="flex items-center gap-2">
+                          <Input
+                            type="number"
+                            min={0}
+                            value={testLateMinutes[player.id] ?? ''}
+                            onChange={(e) =>
+                              setTestLateMinutes((prev) => ({
+                                ...prev,
+                                [player.id]: e.target.value,
+                              }))
+                            }
+                            placeholder="דקות איחור"
+                            className="h-8 w-24"
+                          />
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            disabled={testActionLoading[player.id]}
+                            onClick={() => updateTestPlayer(player, 'late_set')}
+                          >
+                            סמן מאחר
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            disabled={testActionLoading[player.id]}
+                            onClick={() => updateTestPlayer(player, 'late_clear')}
+                          >
+                            נקה איחור
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </CardContent>
       </Card>
 
