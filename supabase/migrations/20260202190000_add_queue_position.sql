@@ -23,12 +23,30 @@ update public.registrations
 set queue_position = null
 where status = 'active';
 
-alter table public.registrations
-  add constraint registrations_active_queue_position_null
-  check (status <> 'active' or queue_position is null)
-  not valid;
+do $$
+begin
+  if not exists (
+    select 1
+    from pg_constraint
+    where conname = 'registrations_active_queue_position_null'
+      and conrelid = 'public.registrations'::regclass
+  ) then
+    alter table public.registrations
+      add constraint registrations_active_queue_position_null
+      check (status <> 'active' or queue_position is null)
+      not valid;
+  end if;
 
-alter table public.registrations
-  add constraint registrations_standby_queue_position_not_null
-  check (status <> 'standby' or queue_position is not null)
-  not valid;
+  if not exists (
+    select 1
+    from pg_constraint
+    where conname = 'registrations_standby_queue_position_not_null'
+      and conrelid = 'public.registrations'::regclass
+  ) then
+    alter table public.registrations
+      add constraint registrations_standby_queue_position_not_null
+      check (status <> 'standby' or queue_position is not null)
+      not valid;
+  end if;
+end;
+$$;
