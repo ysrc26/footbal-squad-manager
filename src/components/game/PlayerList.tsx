@@ -42,14 +42,15 @@ export function PlayerList({ title, players, maxPlayers, showPosition, emptyMess
                 key={registration.id}
                 className="flex items-center justify-between p-2 rounded-lg bg-secondary/30"
               >
-              <div className="flex items-center gap-3">
-                  {showPosition ? (
+                <div className="flex items-center gap-3">
+                  {showPosition && (
                     <span className="w-6 h-6 rounded-full bg-primary/20 text-primary text-xs flex items-center justify-center font-medium">
-                      {index + 1}
+                      {registration.queue_position ?? index + 1}
                     </span>
-                  ) : registration.avatar_url ? (
-                    <img 
-                      src={registration.avatar_url} 
+                  )}
+                  {registration.avatar_url ? (
+                    <img
+                      src={registration.avatar_url}
                       alt=""
                       className="w-6 h-6 rounded-full object-cover"
                     />
@@ -62,11 +63,21 @@ export function PlayerList({ title, players, maxPlayers, showPosition, emptyMess
                     {registration.full_name || 'שחקן אנונימי'}
                   </span>
                 </div>
-                {registration.check_in_status === 'checked_in' && (
-                  <Badge className="bg-green-500/20 text-green-500 border-green-500/50 text-xs">
-                    <CheckCircle2 className="h-3 w-3 ml-1" />
-                    צ&apos;ק-אין
-                  </Badge>
+                {(registration.check_in_status === 'checked_in' ||
+                  (registration.eta_minutes ?? 0) > 0) && (
+                  <div className="flex items-center gap-2">
+                    {registration.check_in_status === 'checked_in' && (
+                      <Badge className="bg-green-500/20 text-green-500 border-green-500/50 text-xs">
+                        <CheckCircle2 className="h-3 w-3 ml-1" />
+                        צ&apos;ק-אין
+                      </Badge>
+                    )}
+                    {(registration.eta_minutes ?? 0) > 0 && (
+                      <Badge className="bg-red-500/20 text-red-500 border-red-500/50 text-xs">
+                        מאחר {registration.eta_minutes}ד&apos;
+                      </Badge>
+                    )}
+                  </div>
                 )}
               </div>
             ))}

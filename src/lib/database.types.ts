@@ -153,6 +153,7 @@ export interface Database {
           status: RegistrationStatus
           check_in_status: CheckInStatus
           eta_minutes: number | null
+          queue_position: number | null
           created_at: string
           updated_at: string
         }
@@ -163,6 +164,7 @@ export interface Database {
           status?: RegistrationStatus
           check_in_status?: CheckInStatus
           eta_minutes?: number | null
+          queue_position?: number | null
           created_at?: string
           updated_at?: string
         }
@@ -173,6 +175,7 @@ export interface Database {
           status?: RegistrationStatus
           check_in_status?: CheckInStatus
           eta_minutes?: number | null
+          queue_position?: number | null
           created_at?: string
           updated_at?: string
         }
@@ -185,6 +188,57 @@ export interface Database {
           _role: AppRole
         }
         Returns: boolean
+      }
+      register_for_game: {
+        Args: {
+          _game_id: string
+        }
+        Returns: {
+          registration_id: string
+          status: RegistrationStatus
+          queue_position: number | null
+        }[]
+      }
+      cancel_registration_for_game: {
+        Args: {
+          _game_id: string
+        }
+        Returns: {
+          cancelled_registration_id: string
+          promoted_registration_id: string | null
+          promoted_user_id: string | null
+        }[]
+      }
+      process_late_swaps: {
+        Args: {
+          _game_id: string
+        }
+        Returns: {
+          swaps_count: number
+          swaps: Json
+        }[]
+      }
+      admin_create_test_game: {
+        Args: {
+          _kickoff_time: string
+          _deadline_time: string
+          _max_players: number
+          _max_standby: number
+          _active_count: number
+          _standby_count: number
+          _batch_id: string
+        }
+        Returns: {
+          game_id: string
+          profile_ids: string[]
+        }[]
+      }
+      admin_cleanup_test_game: {
+        Args: {
+          _game_id: string | null
+          _profile_ids: string[] | null
+        }
+        Returns: null
       }
     }
     Enums: {
