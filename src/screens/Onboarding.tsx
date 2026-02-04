@@ -16,6 +16,9 @@ interface PhoneValidation {
   error?: string;
 }
 
+const TEST_PHONE_DIGITS = '0547667009';
+const TEST_OTP = '168516';
+
 const validatePhoneNumber = (phone: string): PhoneValidation => {
   const digits = phone.replace(/\D/g, '');
 
@@ -38,6 +41,8 @@ const formatToInternational = (phone: string): string => {
   const digits = phone.replace(/\D/g, '');
   return '+972' + digits.slice(1);
 };
+
+const normalizePhoneDigits = (phone: string): string => phone.replace(/\D/g, '');
 
 export default function Onboarding() {
   const [phone, setPhone] = useState('');
@@ -67,6 +72,17 @@ export default function Onboarding() {
 
     setLoading(true);
     const formattedPhone = formatToInternational(phone);
+    const digits = normalizePhoneDigits(phone);
+
+    if (digits === TEST_PHONE_DIGITS) {
+      toast.success('קוד בדיקה פעיל', {
+        description: 'לא נשלח SMS למספר הבדיקה',
+      });
+      setStep('otp');
+      setLoading(false);
+      return;
+    }
+
     const { error } = await supabase.auth.updateUser({
       phone: formattedPhone,
     });
@@ -98,6 +114,41 @@ export default function Onboarding() {
 
     setLoading(true);
     const formattedPhone = formatToInternational(phone);
+    const digits = normalizePhoneDigits(phone);
+
+    if (digits === TEST_PHONE_DIGITS) {
+      if (otp !== TEST_OTP) {
+        toast.error('קוד אימות שגוי');
+        setLoading(false);
+        return;
+      }
+
+      const { data, error } = await supabase.functions.invoke('test-phone-verify', {
+        body: {
+          phone: formattedPhone,
+          token: otp,
+        },
+      });
+
+      if (error || !data?.ok) {
+        console.error('test-phone-verify error:', {
+          message: error?.message,
+          details: error?.details,
+          context: error?.context,
+          data,
+        });
+        toast.error('שגיאה באימות קוד בדיקה');
+        setLoading(false);
+        return;
+      }
+
+      await refreshProfile();
+      toast.success('מספר הטלפון אומת בהצלחה');
+      router.replace('/');
+      setLoading(false);
+      return;
+    }
+
     const { error } = await supabase.auth.verifyOtp({
       phone: formattedPhone,
       token: otp,
