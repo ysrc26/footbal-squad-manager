@@ -222,28 +222,32 @@ export function UserManagement() {
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-4">
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm text-muted-foreground">תושב</span>
-                      {updating === user.id ? (
-                        <Loader2 className="h-4 w-4 animate-spin text-primary" />
-                      ) : (
-                        <Switch
-                          checked={user.is_resident}
-                          onCheckedChange={() => toggleResidentStatus(user.id, user.is_resident)}
-                        />
-                      )}
+                  <div className="flex items-center gap-6">
+                    <div className="flex items-center justify-between gap-2 min-w-[110px]">
+                      <span className="text-sm text-muted-foreground leading-none">תושב</span>
+                      <div className="flex h-6 w-11 items-center justify-center">
+                        {updating === user.id ? (
+                          <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                        ) : (
+                          <Switch
+                            checked={user.is_resident}
+                            onCheckedChange={() => toggleResidentStatus(user.id, user.is_resident)}
+                          />
+                        )}
+                      </div>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm text-muted-foreground">מנהל</span>
-                      {updating === user.id ? (
-                        <Loader2 className="h-4 w-4 animate-spin text-primary" />
-                      ) : (
-                        <Switch
-                          checked={user.isAdmin}
-                          onCheckedChange={() => toggleAdminRole(user.id, user.isAdmin)}
-                        />
-                      )}
+                    <div className="flex items-center justify-between gap-2 min-w-[110px]">
+                      <span className="text-sm text-muted-foreground leading-none">מנהל</span>
+                      <div className="flex h-6 w-11 items-center justify-center">
+                        {updating === user.id ? (
+                          <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                        ) : (
+                          <Switch
+                            checked={user.isAdmin}
+                            onCheckedChange={() => toggleAdminRole(user.id, user.isAdmin)}
+                          />
+                        )}
+                      </div>
                     </div>
                   </div>
                 </div>
