@@ -28,37 +28,36 @@ export default function Dashboard() {
     if (promptCheckedRef.current) return;
     promptCheckedRef.current = true;
 
+    const userPromptKey = `${PUSH_PROMPTED_KEY}:${user.id}`;
     const pending = window.localStorage.getItem(PENDING_PUSH_KEY);
 
-    const evaluatePrompt = async () => {
-      const userPromptKey = `${PUSH_PROMPTED_KEY}:${user.id}`;
-      const alreadyPrompted = window.localStorage.getItem(userPromptKey);
-
+    if (pending) {
+      window.localStorage.removeItem(PENDING_PUSH_KEY);
       if (!isPushSupported()) {
-        window.localStorage.removeItem(PENDING_PUSH_KEY);
         window.localStorage.setItem(userPromptKey, '1');
         toast.message('התראות פוש אינן נתמכות במכשיר זה');
         return;
       }
+      requestAnimationFrame(() => setShowPushModal(true));
+      return;
+    }
+
+    const evaluateDevicePrompt = async () => {
+      if (!profile?.push_enabled) return;
+      if (!isPushSupported()) return;
+
+      const alreadyPrompted = window.localStorage.getItem(userPromptKey);
+      if (alreadyPrompted) return;
 
       const { optedIn, hasSubscription } = await getPushSubscriptionStatus();
       const shouldPromptForDevice = !optedIn || !hasSubscription;
-      const shouldPromptAfterSignup = Boolean(pending);
+      if (!shouldPromptForDevice) return;
 
-      if (!shouldPromptAfterSignup && !shouldPromptForDevice) {
-        return;
-      }
-
-      if (alreadyPrompted && !shouldPromptAfterSignup && !shouldPromptForDevice) {
-        return;
-      }
-
-      window.localStorage.removeItem(PENDING_PUSH_KEY);
       requestAnimationFrame(() => setShowPushModal(true));
     };
 
-    evaluatePrompt();
-  }, [user, profile?.push_enabled, refreshProfile]);
+    evaluateDevicePrompt();
+  }, [user, profile?.push_enabled]);
 
   const handlePushConfirm = async () => {
     if (!user) return;

@@ -12,7 +12,7 @@ import { toast } from 'sonner';
 import { ArrowRight, Bell, Camera, Loader2, LogOut, Phone, User, Home } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
-import { ensurePushOptIn, isPushSupported, optOutPush } from '@/lib/onesignal';
+import { ensurePushOptIn, getPushSubscriptionStatus, isPushSupported, optOutPush } from '@/lib/onesignal';
 import PushPromptModal from '@/components/PushPromptModal';
 
 const PUSH_PROMPTED_KEY = 'pushPrompted';
@@ -54,6 +54,39 @@ export default function Profile() {
   useEffect(() => {
     setPushSupported(isPushSupported());
   }, []);
+
+  useEffect(() => {
+    let active = true;
+    if (!user) return () => {
+      active = false;
+    };
+    if (!profile?.push_enabled) {
+      setPushEnabled(false);
+      return () => {
+        active = false;
+      };
+    }
+    if (!isPushSupported()) {
+      setPushEnabled(false);
+      return () => {
+        active = false;
+      };
+    }
+
+    getPushSubscriptionStatus()
+      .then(({ optedIn, hasSubscription }) => {
+        if (!active) return;
+        setPushEnabled(optedIn && hasSubscription);
+      })
+      .catch(() => {
+        if (!active) return;
+        setPushEnabled(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [user?.id, profile?.push_enabled]);
 
   const phoneDisplay = formatToLocal(user?.phone ?? profile?.phone_number ?? '');
 
@@ -175,7 +208,7 @@ export default function Profile() {
       toast.error('שגיאה בהפעלת התראות פוש', {
         description: error.message,
       });
-      setPushEnabled(profile?.push_enabled ?? false);
+      setPushEnabled(false);
     } finally {
       setPushLoading(false);
       setShowPushModal(false);
@@ -192,23 +225,18 @@ export default function Profile() {
     try {
       await optOutPush();
 
-      const { error } = await supabase
-        .from('profiles')
-        .update({ push_enabled: false, updated_at: new Date().toISOString() })
-        .eq('id', user.id);
-
-      if (error) throw error;
-
       setPushEnabled(false);
-      await refreshProfile();
       toast.success('התראות פוש הושבתו');
     } catch (error: any) {
       toast.error('שגיאה בעדכון התראות פוש', {
         description: error.message,
       });
-      setPushEnabled(profile?.push_enabled ?? false);
+      setPushEnabled(false);
     } finally {
       setPushLoading(false);
+      if (typeof window !== 'undefined') {
+        window.localStorage.setItem(`${PUSH_PROMPTED_KEY}:${user.id}`, '1');
+      }
     }
   };
 

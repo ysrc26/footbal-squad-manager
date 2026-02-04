@@ -26,15 +26,21 @@ const loadSdk = () => {
   });
 };
 
-const withOneSignal = async (callback: (os: OneSignalType) => void | Promise<void>) => {
+const withOneSignal = async (
+  callback: (os: OneSignalType) => void | Promise<void>,
+  timeoutMs = 5000
+) => {
   if (!isBrowser() || !window.OneSignal) return;
 
-  await new Promise<void>((resolve) => {
-    window.OneSignal!.push(async () => {
-      await callback(window.OneSignal);
-      resolve();
-    });
-  });
+  await Promise.race([
+    new Promise<void>((resolve) => {
+      window.OneSignal!.push(async () => {
+        await callback(window.OneSignal);
+        resolve();
+      });
+    }),
+    new Promise<void>((resolve) => setTimeout(resolve, timeoutMs)),
+  ]);
 };
 
 export const initOneSignal = async () => {
@@ -99,21 +105,32 @@ export const clearOneSignalExternalUserId = async () => {
 
 export const requestPushPermission = async () => {
   if (!isBrowser() || !("Notification" in window)) return "denied" as NotificationPermission;
-  await initOneSignal();
 
   let permission: NotificationPermission = Notification.permission;
 
-  await withOneSignal(async (os) => {
-    if (os.Notifications?.requestPermission) {
-      permission = await os.Notifications.requestPermission();
-      return;
-    }
+  try {
+    await initOneSignal();
+  } catch {
+    // Ignore SDK init errors and fallback to browser permission.
+  }
 
-    if (typeof os.registerForPushNotifications === "function") {
-      await os.registerForPushNotifications();
-      permission = Notification.permission;
-    }
-  });
+  if (window.OneSignal) {
+    await withOneSignal(async (os) => {
+      if (os.Notifications?.requestPermission) {
+        permission = await os.Notifications.requestPermission();
+        return;
+      }
+
+      if (typeof os.registerForPushNotifications === "function") {
+        await os.registerForPushNotifications();
+        permission = Notification.permission;
+      }
+    });
+  }
+
+  if (permission === "default" && typeof Notification.requestPermission === "function") {
+    permission = await Notification.requestPermission();
+  }
 
   return permission;
 };
@@ -163,32 +180,48 @@ export const ensurePushOptIn = async () => {
 };
 
 export const getPushSubscriptionStatus = async () => {
-  await initOneSignal();
+  try {
+    await initOneSignal();
+  } catch {
+    return {
+      optedIn: false,
+      hasSubscription: false,
+      subscriptionId: null,
+    };
+  }
 
   let optedIn = false;
   let subscriptionId: string | null = null;
 
-  await withOneSignal(async (os) => {
-    if (os.User?.PushSubscription) {
-      const optedInValue = os.User.PushSubscription.optedIn;
-      if (typeof optedInValue === "boolean") {
-        optedIn = optedInValue;
-      } else if (typeof optedInValue === "function") {
-        optedIn = await optedInValue();
+  try {
+    await withOneSignal(async (os) => {
+      if (os.User?.PushSubscription) {
+        const optedInValue = os.User.PushSubscription.optedIn;
+        if (typeof optedInValue === "boolean") {
+          optedIn = optedInValue;
+        } else if (typeof optedInValue === "function") {
+          optedIn = await optedInValue();
+        }
+
+        const idValue = os.User.PushSubscription.id;
+        if (typeof idValue === "string") {
+          subscriptionId = idValue;
+        } else if (typeof idValue === "function") {
+          subscriptionId = await idValue();
+        }
       }
 
-      const idValue = os.User.PushSubscription.id;
-      if (typeof idValue === "string") {
-        subscriptionId = idValue;
-      } else if (typeof idValue === "function") {
-        subscriptionId = await idValue();
+      if (!subscriptionId && typeof os.getUserId === "function") {
+        subscriptionId = await os.getUserId();
       }
-    }
-
-    if (!subscriptionId && typeof os.getUserId === "function") {
-      subscriptionId = await os.getUserId();
-    }
-  });
+    });
+  } catch {
+    return {
+      optedIn: false,
+      hasSubscription: false,
+      subscriptionId: null,
+    };
+  }
 
   return {
     optedIn,
