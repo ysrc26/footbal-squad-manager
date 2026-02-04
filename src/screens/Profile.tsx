@@ -25,8 +25,16 @@ interface PhoneValidation {
   error?: string;
 }
 
-const validatePhoneNumber = (phone: string): PhoneValidation => {
+const normalizeToLocalDigits = (phone: string): string => {
   const digits = phone.replace(/\D/g, '');
+  if (digits.startsWith('972') && digits.length === 12) {
+    return `0${digits.slice(3)}`;
+  }
+  return digits;
+};
+
+const validatePhoneNumber = (phone: string): PhoneValidation => {
+  const digits = normalizeToLocalDigits(phone);
 
   if (digits.length === 0) {
     return { isValid: false };
@@ -44,7 +52,8 @@ const validatePhoneNumber = (phone: string): PhoneValidation => {
 };
 
 const formatToInternational = (phone: string): string => {
-  const digits = phone.replace(/\D/g, '');
+  const digits = normalizeToLocalDigits(phone);
+  if (!digits.startsWith('0')) return `+${digits}`;
   return `+972${digits.slice(1)}`;
 };
 
@@ -71,7 +80,7 @@ export default function Profile() {
   const [otpLoading, setOtpLoading] = useState(false);
   const [autoCompleting, setAutoCompleting] = useState(false);
   const [isResident, setIsResident] = useState(false);
-  const [pushEnabled, setPushEnabled] = useState(true);
+  const [pushEnabled, setPushEnabled] = useState(false);
   const [pushLoading, setPushLoading] = useState(false);
   const [pushSupported, setPushSupported] = useState(() => isPushSupported());
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -96,7 +105,7 @@ export default function Profile() {
     }
 
     setIsResident(profile.is_resident || false);
-    setPushEnabled(profile.push_enabled ?? true);
+    setPushEnabled(profile.push_enabled ?? false);
 
     if (initialCompletionRef.current === null) {
       initialCompletionRef.current = Boolean(user.phone) && Boolean(profile.full_name?.trim());
@@ -149,6 +158,7 @@ export default function Profile() {
   const needsVerification = Boolean(formattedPhone && formattedPhone !== user?.phone);
 
   const isFirstTimeSetup = !profile?.full_name;
+  const requiresCompletion = Boolean(!user?.phone || !fullName.trim());
 
   const uploadAvatar = async (file: File) => {
     if (!user) return;
@@ -207,6 +217,11 @@ export default function Profile() {
 
     if (!fullName.trim()) {
       toast.error('יש להזין שם מלא');
+      return;
+    }
+
+    if (!user.phone && !phoneValidation.isValid) {
+      toast.error('יש להזין מספר טלפון תקין');
       return;
     }
 
@@ -341,7 +356,7 @@ export default function Profile() {
       toast.error('שגיאה בעדכון התראות פוש', {
         description: error.message,
       });
-      setPushEnabled(profile?.push_enabled ?? true);
+      setPushEnabled(profile?.push_enabled ?? false);
     } finally {
       setPushLoading(false);
     }
@@ -439,6 +454,14 @@ export default function Profile() {
             <CardDescription>עדכן את הפרטים שלך</CardDescription>
           </CardHeader>
           <CardContent>
+            {requiresCompletion && (
+              <div className="mb-6 rounded-lg border border-primary/40 bg-primary/10 p-4 text-center">
+                <p className="text-base font-semibold">ברוך הבא!</p>
+                <p className="text-sm text-muted-foreground">
+                  כדי להמשיך, יש להשלים את הפרטים הבאים: שם מלא ומספר טלפון.
+                </p>
+              </div>
+            )}
             <form onSubmit={handleSave} className="space-y-6">
               <div className="space-y-2">
                 <Label htmlFor="fullName" className="flex items-center gap-2">
@@ -456,6 +479,7 @@ export default function Profile() {
                   className="h-12"
                   required
                 />
+                <p className="text-xs text-muted-foreground">שדה חובה *</p>
               </div>
 
               <div className="space-y-2">
@@ -465,13 +489,14 @@ export default function Profile() {
                 </Label>
                 <Input
                   value={phoneInput}
+                  placeholder="0501234567"
                   onChange={(e) => {
                     const nextValue = e.target.value;
                     phoneTouchedRef.current = true;
                     setPhoneInput(nextValue);
                     if (pendingPhone) {
-                      const nextDigits = nextValue.replace(/\D/g, '');
-                      const pendingDigits = formatToLocal(pendingPhone).replace(/\D/g, '');
+                      const nextDigits = normalizeToLocalDigits(nextValue);
+                      const pendingDigits = normalizeToLocalDigits(formatToLocal(pendingPhone));
                       if (nextDigits !== pendingDigits) {
                         setPendingPhone(null);
                         setPhoneStep('phone');
@@ -481,10 +506,12 @@ export default function Profile() {
                   }}
                   className={`h-12 ${showPhoneError ? 'border-destructive focus-visible:ring-destructive' : ''}`}
                   dir="ltr"
+                  required
                 />
                 {showPhoneError && (
                   <p className="text-sm text-destructive text-right">{phoneValidation.error}</p>
                 )}
+                <p className="text-xs text-muted-foreground">שדה חובה *</p>
                 <div className="flex flex-wrap items-center gap-2">
                   <Button
                     type="button"
