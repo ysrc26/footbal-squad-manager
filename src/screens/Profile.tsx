@@ -128,6 +128,18 @@ export default function Profile() {
         description: error.message,
       });
     } else {
+      const { error: authError } = await supabase.auth.updateUser({
+        data: { full_name: fullName.trim() },
+      });
+
+      if (authError) {
+        toast.error('שגיאה בעדכון שם המשתמש', {
+          description: authError.message,
+        });
+        setLoading(false);
+        return;
+      }
+
       toast.success('הפרופיל נשמר בהצלחה!');
       await refreshProfile();
     }

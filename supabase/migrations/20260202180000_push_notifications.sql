@@ -1,7 +1,7 @@
 create extension if not exists pgcrypto;
 
 alter table public.profiles
-  add column if not exists push_enabled boolean default true;
+  add column if not exists push_enabled boolean default false;
 
 create table if not exists public.push_notifications_log (
   id uuid primary key default gen_random_uuid(),

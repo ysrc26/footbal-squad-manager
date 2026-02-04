@@ -204,9 +204,22 @@ export default function Welcome() {
       return;
     }
 
+    const { error: authError } = await supabase.auth.updateUser({
+      data: { full_name: fullName.trim() },
+    });
+
+    if (authError) {
+      toast.error('שגיאה בעדכון שם המשתמש', {
+        description: authError.message,
+      });
+      setSaving(false);
+      return;
+    }
+
     await refreshProfile();
     localStorage.setItem(PENDING_PUSH_KEY, '1');
     router.replace('/dashboard');
+    setSaving(false);
   };
 
   const handleSignOut = async () => {

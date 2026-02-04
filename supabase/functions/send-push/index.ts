@@ -91,7 +91,7 @@ const filterPushEnabled = async (userIds: string[]) => {
   }
 
   return data
-    .filter((row) => row.push_enabled !== false)
+    .filter((row) => row.push_enabled === true)
     .map((row) => row.id as string);
 };
 
@@ -110,7 +110,7 @@ const fetchAllPushEnabledUsers = async () => {
       break;
     }
 
-    ids.push(...data.filter((row) => row.push_enabled !== false).map((row) => row.id as string));
+    ids.push(...data.filter((row) => row.push_enabled === true).map((row) => row.id as string));
 
     if (data.length < pageSize) {
       break;
