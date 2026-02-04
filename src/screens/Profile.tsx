@@ -12,7 +12,8 @@ import { toast } from 'sonner';
 import { ArrowRight, Bell, Camera, Loader2, LogOut, Phone, User, Home } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
-import { initOneSignal, isPushSupported, optInPush, optOutPush, requestPushPermission } from '@/lib/onesignal';
+import { ensurePushOptIn, isPushSupported, optOutPush } from '@/lib/onesignal';
+import PushPromptModal from '@/components/PushPromptModal';
 
 const formatToLocal = (phone: string): string => {
   if (!phone) return '';
@@ -32,6 +33,7 @@ export default function Profile() {
   const [pushEnabled, setPushEnabled] = useState(false);
   const [pushLoading, setPushLoading] = useState(false);
   const [pushSupported, setPushSupported] = useState(() => isPushSupported());
+  const [showPushModal, setShowPushModal] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const nameTouchedRef = useRef(false);
 
@@ -146,36 +148,55 @@ export default function Profile() {
     setLoading(false);
   };
 
-  const handlePushToggle = async (enabled: boolean) => {
+  const enablePush = async () => {
     if (!user) return;
 
     setPushLoading(true);
     try {
-      await initOneSignal();
-
-      if (enabled) {
-        const permission = await requestPushPermission();
-        if (permission !== 'granted') {
-          toast.error('נדרש אישור התראות בדפדפן כדי להפעיל פוש');
-          setPushEnabled(false);
-          return;
-        }
-
-        await optInPush();
-      } else {
-        await optOutPush();
+      const permission = await ensurePushOptIn();
+      if (permission !== 'granted') {
+        toast.error('נדרש אישור התראות בדפדפן כדי להפעיל פוש');
+        return;
       }
 
       const { error } = await supabase
         .from('profiles')
-        .update({ push_enabled: enabled, updated_at: new Date().toISOString() })
+        .update({ push_enabled: true, updated_at: new Date().toISOString() })
         .eq('id', user.id);
 
       if (error) throw error;
 
-      setPushEnabled(enabled);
+      setPushEnabled(true);
       await refreshProfile();
-      toast.success(enabled ? 'התראות פוש הופעלו' : 'התראות פוש הושבתו');
+      toast.success('התראות פוש הופעלו');
+    } catch (error: any) {
+      toast.error('שגיאה בהפעלת התראות פוש', {
+        description: error.message,
+      });
+      setPushEnabled(profile?.push_enabled ?? false);
+    } finally {
+      setPushLoading(false);
+      setShowPushModal(false);
+    }
+  };
+
+  const disablePush = async () => {
+    if (!user) return;
+
+    setPushLoading(true);
+    try {
+      await optOutPush();
+
+      const { error } = await supabase
+        .from('profiles')
+        .update({ push_enabled: false, updated_at: new Date().toISOString() })
+        .eq('id', user.id);
+
+      if (error) throw error;
+
+      setPushEnabled(false);
+      await refreshProfile();
+      toast.success('התראות פוש הושבתו');
     } catch (error: any) {
       toast.error('שגיאה בעדכון התראות פוש', {
         description: error.message,
@@ -186,6 +207,20 @@ export default function Profile() {
     }
   };
 
+  const handlePushToggle = (enabled: boolean) => {
+    if (enabled) {
+      if (!pushSupported) {
+        toast.message('התראות פוש אינן נתמכות במכשיר זה');
+        setPushEnabled(false);
+        return;
+      }
+      setShowPushModal(true);
+      return;
+    }
+
+    disablePush();
+  };
+
   const handleSignOut = async () => {
     setSigningOut(true);
     await signOut();
@@ -194,6 +229,21 @@ export default function Profile() {
 
   return (
     <div className="min-h-screen gradient-dark">
+      <PushPromptModal
+        open={showPushModal}
+        onOpenChange={(open) => {
+          if (!open) {
+            setShowPushModal(false);
+            setPushEnabled(false);
+          }
+        }}
+        onConfirm={enablePush}
+        onCancel={() => {
+          setShowPushModal(false);
+          setPushEnabled(false);
+        }}
+        loading={pushLoading}
+      />
       <header className="sticky top-0 z-50 glass border-b border-border/50 backdrop-blur-xl">
         <div className="container flex items-center h-16 px-4">
           <Button variant="ghost" size="icon" onClick={() => router.back()}>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -9,12 +9,17 @@ import { LogOut, User, Settings, FileText, Home } from 'lucide-react';
 import Link from 'next/link';
 import { GameRegistration } from '@/components/game/GameRegistration';
 import { supabase } from '@/integrations/supabase/client';
-import { initOneSignal, isPushSupported, optInPush, requestPushPermission } from '@/lib/onesignal';
+import { ensurePushOptIn, isPushSupported } from '@/lib/onesignal';
+import PushPromptModal from '@/components/PushPromptModal';
+import { toast } from 'sonner';
 
 const PENDING_PUSH_KEY = 'pendingPushPrompt';
+const PUSH_PROMPTED_KEY = 'pushPrompted';
 
 export default function Dashboard() {
   const { user, profile, isAdmin, signOut, refreshProfile } = useAuth();
+  const [showPushModal, setShowPushModal] = useState(false);
+  const [pushLoading, setPushLoading] = useState(false);
 
   useEffect(() => {
     if (!user) return;
@@ -22,36 +27,76 @@ export default function Dashboard() {
     const pending = window.localStorage.getItem(PENDING_PUSH_KEY);
     if (!pending) return;
 
-    window.localStorage.removeItem(PENDING_PUSH_KEY);
-
     if (profile?.push_enabled) return;
-    if (!isPushSupported()) return;
+    if (!isPushSupported()) {
+      window.localStorage.removeItem(PENDING_PUSH_KEY);
+      window.localStorage.setItem(PUSH_PROMPTED_KEY, '1');
+      toast.message('התראות פוש אינן נתמכות במכשיר זה');
+      return;
+    }
 
-    const requestPermission = async () => {
-      try {
-        await initOneSignal();
-        const permission = await requestPushPermission();
-        if (permission !== 'granted') return;
+    const alreadyPrompted = window.localStorage.getItem(PUSH_PROMPTED_KEY);
+    if (alreadyPrompted) {
+      window.localStorage.removeItem(PENDING_PUSH_KEY);
+      return;
+    }
 
-        await optInPush();
-        const { error } = await supabase
-          .from('profiles')
-          .update({ push_enabled: true, updated_at: new Date().toISOString() })
-          .eq('id', user.id);
-
-        if (!error) {
-          await refreshProfile();
-        }
-      } catch {
-        // Ignore OneSignal errors from the post-completion prompt.
-      }
-    };
-
-    requestPermission();
+    window.localStorage.removeItem(PENDING_PUSH_KEY);
+    setShowPushModal(true);
   }, [user, profile?.push_enabled, refreshProfile]);
+
+  const handlePushConfirm = async () => {
+    if (!user) return;
+    setPushLoading(true);
+    try {
+      const permission = await ensurePushOptIn();
+      if (permission !== 'granted') {
+        toast.error('נדרש אישור התראות בדפדפן כדי להפעיל פוש');
+        return;
+      }
+
+      const { error } = await supabase
+        .from('profiles')
+        .update({ push_enabled: true, updated_at: new Date().toISOString() })
+        .eq('id', user.id);
+
+      if (!error) {
+        await refreshProfile();
+        toast.success('התראות פוש הופעלו');
+      }
+    } catch {
+      toast.error('שגיאה בהפעלת התראות פוש');
+    } finally {
+      setPushLoading(false);
+      setShowPushModal(false);
+      if (typeof window !== 'undefined') {
+        window.localStorage.setItem(PUSH_PROMPTED_KEY, '1');
+      }
+    }
+  };
+
+  const handlePushCancel = () => {
+    setShowPushModal(false);
+    if (typeof window !== 'undefined') {
+      window.localStorage.setItem(PUSH_PROMPTED_KEY, '1');
+    }
+  };
 
   return (
     <div className="min-h-screen gradient-dark pb-20">
+      <PushPromptModal
+        open={showPushModal}
+        onOpenChange={(open) => {
+          if (!open) {
+            handlePushCancel();
+            return;
+          }
+          setShowPushModal(true);
+        }}
+        onConfirm={handlePushConfirm}
+        onCancel={handlePushCancel}
+        loading={pushLoading}
+      />
       {/* Header */}
       <header className="sticky top-0 z-50 glass border-b border-border/50 backdrop-blur-xl">
         <div className="container flex items-center justify-between h-16 px-4">

@@ -150,5 +150,14 @@ export const optOutPush = async () => {
 
 export const isPushSupported = () => {
   if (!isBrowser()) return false;
-  return "Notification" in window;
+  if (!("Notification" in window)) return false;
+  if (!("serviceWorker" in navigator)) return false;
+  return true;
+};
+
+export const ensurePushOptIn = async () => {
+  const permission = await requestPushPermission();
+  if (permission !== "granted") return permission;
+  await optInPush();
+  return permission;
 };
