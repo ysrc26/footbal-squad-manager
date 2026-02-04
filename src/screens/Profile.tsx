@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, type ChangeEvent, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type ChangeEvent, type FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
@@ -12,50 +12,7 @@ import { toast } from 'sonner';
 import { ArrowRight, Bell, Camera, Loader2, LogOut, Phone, User, Home } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
-import {
-  initOneSignal,
-  isPushSupported,
-  optInPush,
-  optOutPush,
-  requestPushPermission,
-} from '@/lib/onesignal';
-
-interface PhoneValidation {
-  isValid: boolean;
-  error?: string;
-}
-
-const normalizeToLocalDigits = (phone: string): string => {
-  const digits = phone.replace(/\D/g, '');
-  if (digits.startsWith('972') && digits.length === 12) {
-    return `0${digits.slice(3)}`;
-  }
-  return digits;
-};
-
-const validatePhoneNumber = (phone: string): PhoneValidation => {
-  const digits = normalizeToLocalDigits(phone);
-
-  if (digits.length === 0) {
-    return { isValid: false };
-  }
-
-  if (!digits.startsWith('05')) {
-    return { isValid: false, error: 'מספר הטלפון חייב להתחיל ב-05' };
-  }
-
-  if (digits.length !== 10) {
-    return { isValid: false, error: 'מספר הטלפון חייב להכיל 10 ספרות' };
-  }
-
-  return { isValid: true };
-};
-
-const formatToInternational = (phone: string): string => {
-  const digits = normalizeToLocalDigits(phone);
-  if (!digits.startsWith('0')) return `+${digits}`;
-  return `+972${digits.slice(1)}`;
-};
+import { initOneSignal, isPushSupported, optInPush, optOutPush, requestPushPermission } from '@/lib/onesignal';
 
 const formatToLocal = (phone: string): string => {
   if (!phone) return '';
@@ -72,23 +29,11 @@ export default function Profile() {
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
   const [fullName, setFullName] = useState('');
-  const [phoneInput, setPhoneInput] = useState('');
-  const [otp, setOtp] = useState('');
-  const [phoneStep, setPhoneStep] = useState<'phone' | 'otp'>('phone');
-  const [pendingPhone, setPendingPhone] = useState<string | null>(null);
-  const [phoneLoading, setPhoneLoading] = useState(false);
-  const [otpLoading, setOtpLoading] = useState(false);
-  const [autoCompleting, setAutoCompleting] = useState(false);
-  const [isResident, setIsResident] = useState(false);
   const [pushEnabled, setPushEnabled] = useState(false);
   const [pushLoading, setPushLoading] = useState(false);
   const [pushSupported, setPushSupported] = useState(() => isPushSupported());
   const fileInputRef = useRef<HTMLInputElement>(null);
   const nameTouchedRef = useRef(false);
-  const phoneTouchedRef = useRef(false);
-  const initialCompletionRef = useRef<boolean | null>(null);
-  const autoPromptedRef = useRef(false);
-  const previousUserPhoneRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (!profile || !user) return;
@@ -99,66 +44,14 @@ export default function Profile() {
       setFullName(profile.full_name || metadataName || '');
     }
 
-    if (!phoneTouchedRef.current && !user.phone) {
-      const fallbackPhone = profile.phone_number ? formatToLocal(profile.phone_number) : '';
-      setPhoneInput(fallbackPhone);
-    }
-
-    setIsResident(profile.is_resident || false);
     setPushEnabled(profile.push_enabled ?? false);
-
-    if (initialCompletionRef.current === null) {
-      initialCompletionRef.current = Boolean(user.phone) && Boolean(profile.full_name?.trim());
-    }
   }, [profile, user]);
-
-  useEffect(() => {
-    const currentPhone = user?.phone ?? null;
-    if (!currentPhone) {
-      previousUserPhoneRef.current = currentPhone;
-      return;
-    }
-
-    if (currentPhone !== previousUserPhoneRef.current) {
-      previousUserPhoneRef.current = currentPhone;
-      phoneTouchedRef.current = false;
-      setPhoneInput(formatToLocal(currentPhone));
-      setPendingPhone(null);
-      setPhoneStep('phone');
-      setOtp('');
-    }
-  }, [user?.phone]);
 
   useEffect(() => {
     setPushSupported(isPushSupported());
   }, []);
 
-  useEffect(() => {
-    if (!user || !profile) return;
-    if (initialCompletionRef.current === null) return;
-    if (autoPromptedRef.current) return;
-
-    const isCompleteNow = Boolean(user.phone) && Boolean(profile.full_name?.trim());
-    if (initialCompletionRef.current === false && isCompleteNow) {
-      autoPromptedRef.current = true;
-      setAutoCompleting(true);
-      (async () => {
-        await handleAutoPushPrompt();
-        router.replace('/dashboard');
-      })();
-    }
-  }, [user, profile, router]);
-
-  const phoneValidation = useMemo(() => validatePhoneNumber(phoneInput), [phoneInput]);
-  const showPhoneError = phoneInput.length > 0 && phoneValidation.error;
-
-  const formattedPhone = phoneValidation.isValid ? formatToInternational(phoneInput) : '';
-  const phoneMatchesAuth = Boolean(formattedPhone && formattedPhone === user?.phone);
-  const hasPendingVerification = Boolean(pendingPhone);
-  const needsVerification = Boolean(formattedPhone && formattedPhone !== user?.phone);
-
-  const isFirstTimeSetup = !profile?.full_name;
-  const requiresCompletion = Boolean(!user?.phone || !fullName.trim());
+  const phoneDisplay = formatToLocal(user?.phone ?? profile?.phone_number ?? '');
 
   const uploadAvatar = async (file: File) => {
     if (!user) return;
@@ -220,24 +113,15 @@ export default function Profile() {
       return;
     }
 
-    if (!user.phone && !phoneValidation.isValid) {
-      toast.error('יש להזין מספר טלפון תקין');
-      return;
-    }
-
     setLoading(true);
 
-    const updateData: Record<string, unknown> = {
-      id: user.id,
-      full_name: fullName.trim(),
-      updated_at: new Date().toISOString(),
-    };
-
-    if (isFirstTimeSetup) {
-      updateData.is_resident = isResident;
-    }
-
-    const { error } = await supabase.from('profiles').upsert(updateData);
+    const { error } = await supabase
+      .from('profiles')
+      .update({
+        full_name: fullName.trim(),
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', user.id);
 
     if (error) {
       toast.error('שגיאה בשמירת הפרופיל', {
@@ -248,78 +132,6 @@ export default function Profile() {
       await refreshProfile();
     }
     setLoading(false);
-  };
-
-  const sendPhoneOtp = async () => {
-    if (!phoneValidation.isValid) return;
-    if (!needsVerification) {
-      toast.message('מספר הטלפון כבר מאומת');
-      return;
-    }
-
-    setPhoneLoading(true);
-    const targetPhone = formattedPhone;
-
-    const { error } = await supabase.auth.updateUser({
-      phone: targetPhone,
-    });
-
-    if (error) {
-      toast.error('שגיאה בשליחת קוד האימות', {
-        description: error.message,
-      });
-      setPhoneLoading(false);
-      return;
-    }
-
-    toast.success('קוד אימות נשלח!', {
-      description: 'בדוק את הודעות ה-SMS שלך',
-    });
-    setPendingPhone(targetPhone);
-    setPhoneStep('otp');
-    setOtp('');
-    setPhoneLoading(false);
-  };
-
-  const handleVerifyOtp = async () => {
-    if (!user) return;
-    if (!pendingPhone) return;
-
-    setOtpLoading(true);
-
-    const { error } = await supabase.auth.verifyOtp({
-      phone: pendingPhone,
-      token: otp,
-      type: 'phone_change',
-    });
-
-    if (error) {
-      toast.error('קוד אימות שגוי', {
-        description: error.message,
-      });
-      setOtpLoading(false);
-      return;
-    }
-
-    const { error: updateError } = await supabase
-      .from('profiles')
-      .update({ phone_number: pendingPhone })
-      .eq('id', user.id);
-
-    if (updateError) {
-      toast.error('שגיאה בעדכון מספר הטלפון', {
-        description: updateError.message,
-      });
-      setOtpLoading(false);
-      return;
-    }
-
-    toast.success('מספר הטלפון אומת בהצלחה');
-    await refreshProfile();
-    setPendingPhone(null);
-    setPhoneStep('phone');
-    setOtp('');
-    setOtpLoading(false);
   };
 
   const handlePushToggle = async (enabled: boolean) => {
@@ -359,30 +171,6 @@ export default function Profile() {
       setPushEnabled(profile?.push_enabled ?? false);
     } finally {
       setPushLoading(false);
-    }
-  };
-
-  const handleAutoPushPrompt = async () => {
-    if (!user) return;
-    if (!pushSupported) return;
-
-    try {
-      await initOneSignal();
-      const permission = await requestPushPermission();
-      if (permission !== 'granted') return;
-
-      await optInPush();
-      const { error } = await supabase
-        .from('profiles')
-        .update({ push_enabled: true, updated_at: new Date().toISOString() })
-        .eq('id', user.id);
-
-      if (!error) {
-        setPushEnabled(true);
-        await refreshProfile();
-      }
-    } catch {
-      // Ignore OneSignal errors during auto prompt.
     }
   };
 
@@ -454,14 +242,6 @@ export default function Profile() {
             <CardDescription>עדכן את הפרטים שלך</CardDescription>
           </CardHeader>
           <CardContent>
-            {requiresCompletion && (
-              <div className="mb-6 rounded-lg border border-primary/40 bg-primary/10 p-4 text-center">
-                <p className="text-base font-semibold">ברוך הבא!</p>
-                <p className="text-sm text-muted-foreground">
-                  כדי להמשיך, יש להשלים את הפרטים הבאים: שם מלא ומספר טלפון.
-                </p>
-              </div>
-            )}
             <form onSubmit={handleSave} className="space-y-6">
               <div className="space-y-2">
                 <Label htmlFor="fullName" className="flex items-center gap-2">
@@ -479,7 +259,6 @@ export default function Profile() {
                   className="h-12"
                   required
                 />
-                <p className="text-xs text-muted-foreground">שדה חובה *</p>
               </div>
 
               <div className="space-y-2">
@@ -488,131 +267,28 @@ export default function Profile() {
                   מספר טלפון
                 </Label>
                 <Input
-                  value={phoneInput}
+                  value={phoneDisplay}
                   placeholder="0501234567"
-                  onChange={(e) => {
-                    const nextValue = e.target.value;
-                    phoneTouchedRef.current = true;
-                    setPhoneInput(nextValue);
-                    if (pendingPhone) {
-                      const nextDigits = normalizeToLocalDigits(nextValue);
-                      const pendingDigits = normalizeToLocalDigits(formatToLocal(pendingPhone));
-                      if (nextDigits !== pendingDigits) {
-                        setPendingPhone(null);
-                        setPhoneStep('phone');
-                        setOtp('');
-                      }
-                    }
-                  }}
-                  className={`h-12 ${showPhoneError ? 'border-destructive focus-visible:ring-destructive' : ''}`}
+                  className="h-12 bg-muted"
                   dir="ltr"
-                  required
+                  disabled
                 />
-                {showPhoneError && (
-                  <p className="text-sm text-destructive text-right">{phoneValidation.error}</p>
-                )}
-                <p className="text-xs text-muted-foreground">שדה חובה *</p>
-                <div className="flex flex-wrap items-center gap-2">
-                  <Button
-                    type="button"
-                    variant={needsVerification ? 'default' : 'secondary'}
-                    className="h-10"
-                    onClick={sendPhoneOtp}
-                    disabled={!needsVerification || phoneLoading || otpLoading || autoCompleting}
-                  >
-                    {phoneLoading ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      'שלח קוד אימות'
-                    )}
-                  </Button>
-                  {phoneMatchesAuth && !hasPendingVerification && (
-                    <Badge variant="secondary">מאומת</Badge>
-                  )}
-                  {hasPendingVerification && (
-                    <Badge variant="outline">ממתין לאימות</Badge>
-                  )}
-                </div>
-                {hasPendingVerification && (
-                  <p className="text-sm text-muted-foreground">ממתין לאימות מספר חדש: {formatToLocal(pendingPhone ?? '')}</p>
-                )}
               </div>
 
-              {phoneStep === 'otp' && (
-                <div className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="otp">קוד אימות</Label>
-                    <Input
-                      id="otp"
-                      type="text"
-                      placeholder="123456"
-                      value={otp}
-                      onChange={(e) => setOtp(e.target.value.replace(/\D/g, ''))}
-                      className="text-center text-2xl tracking-widest h-14"
-                      maxLength={6}
-                      dir="ltr"
-                      required
-                    />
+              <div className="flex items-center justify-between p-4 rounded-lg bg-muted/50">
+                <div className="flex items-center gap-3">
+                  <Home className="h-5 w-5 text-muted-foreground" />
+                  <div>
+                    <span className="text-base font-medium">תושב נחלים</span>
+                    <p className="text-sm text-muted-foreground">
+                      {profile?.is_resident ? 'כן' : 'לא'} - לשינוי פנה למנהל
+                    </p>
                   </div>
-                  <Button
-                    type="button"
-                    className="w-full h-12 text-lg font-semibold neon-glow"
-                    onClick={handleVerifyOtp}
-                    disabled={otpLoading || otp.length !== 6 || autoCompleting}
-                  >
-                    {otpLoading ? (
-                      <Loader2 className="h-5 w-5 animate-spin" />
-                    ) : (
-                      'אמת קוד'
-                    )}
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    className="w-full"
-                    onClick={sendPhoneOtp}
-                    disabled={phoneLoading || otpLoading || autoCompleting}
-                  >
-                    שלח קוד חדש
-                  </Button>
                 </div>
-              )}
-
-              {isFirstTimeSetup ? (
-                <div className="flex items-center justify-between p-4 rounded-lg bg-secondary/50">
-                  <div className="flex items-center gap-3">
-                    <Home className="h-5 w-5 text-primary" />
-                    <div>
-                      <Label htmlFor="isResident" className="text-base font-medium cursor-pointer">
-                        תושב נחלים
-                      </Label>
-                      <p className="text-sm text-muted-foreground">
-                        תושבים מקבלים עדיפות בהרשמה
-                      </p>
-                    </div>
-                  </div>
-                  <Switch
-                    id="isResident"
-                    checked={isResident}
-                    onCheckedChange={setIsResident}
-                  />
-                </div>
-              ) : (
-                <div className="flex items-center justify-between p-4 rounded-lg bg-muted/50">
-                  <div className="flex items-center gap-3">
-                    <Home className="h-5 w-5 text-muted-foreground" />
-                    <div>
-                      <span className="text-base font-medium">תושב נחלים</span>
-                      <p className="text-sm text-muted-foreground">
-                        {profile?.is_resident ? 'כן' : 'לא'} - לשינוי פנה למנהל
-                      </p>
-                    </div>
-                  </div>
-                  <Badge variant={profile?.is_resident ? 'default' : 'secondary'}>
-                    {profile?.is_resident ? 'תושב' : 'לא תושב'}
-                  </Badge>
-                </div>
-              )}
+                <Badge variant={profile?.is_resident ? 'default' : 'secondary'}>
+                  {profile?.is_resident ? 'תושב' : 'לא תושב'}
+                </Badge>
+              </div>
 
               <div className="flex items-center justify-between p-4 rounded-lg bg-secondary/50">
                 <div className="flex items-center gap-3">
@@ -630,14 +306,14 @@ export default function Profile() {
                   id="pushEnabled"
                   checked={pushEnabled}
                   onCheckedChange={handlePushToggle}
-                  disabled={!pushSupported || pushLoading || autoCompleting}
+                  disabled={!pushSupported || pushLoading}
                 />
               </div>
 
               <Button
                 type="submit"
                 className="w-full h-12 text-lg font-semibold neon-glow"
-                disabled={loading || autoCompleting}
+                disabled={loading}
               >
                 {loading ? (
                   <Loader2 className="h-5 w-5 animate-spin" />

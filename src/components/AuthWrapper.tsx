@@ -81,10 +81,21 @@ export default function AuthWrapper({ children, requireAdmin = false }: AuthWrap
 
     const hasFullName = Boolean(profile.full_name?.trim());
     const hasVerifiedPhone = Boolean(user.phone);
+    const onWelcome = pathname === '/welcome';
 
-    if ((!hasVerifiedPhone || !hasFullName) && pathname !== '/profile') {
+    if (!hasVerifiedPhone || !hasFullName) {
+      if (!onWelcome) {
+        setRedirecting(true);
+        router.replace('/welcome');
+        return;
+      }
+      setRedirecting(false);
+      return;
+    }
+
+    if (onWelcome) {
       setRedirecting(true);
-      router.replace('/profile');
+      router.replace('/dashboard');
       return;
     }
 

@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -7,9 +8,47 @@ import { Badge } from '@/components/ui/badge';
 import { LogOut, User, Settings, FileText, Home } from 'lucide-react';
 import Link from 'next/link';
 import { GameRegistration } from '@/components/game/GameRegistration';
+import { supabase } from '@/integrations/supabase/client';
+import { initOneSignal, isPushSupported, optInPush, requestPushPermission } from '@/lib/onesignal';
+
+const PENDING_PUSH_KEY = 'pendingPushPrompt';
 
 export default function Dashboard() {
-  const { user, profile, isAdmin, signOut } = useAuth();
+  const { user, profile, isAdmin, signOut, refreshProfile } = useAuth();
+
+  useEffect(() => {
+    if (!user) return;
+    if (typeof window === 'undefined') return;
+    const pending = window.localStorage.getItem(PENDING_PUSH_KEY);
+    if (!pending) return;
+
+    window.localStorage.removeItem(PENDING_PUSH_KEY);
+
+    if (profile?.push_enabled) return;
+    if (!isPushSupported()) return;
+
+    const requestPermission = async () => {
+      try {
+        await initOneSignal();
+        const permission = await requestPushPermission();
+        if (permission !== 'granted') return;
+
+        await optInPush();
+        const { error } = await supabase
+          .from('profiles')
+          .update({ push_enabled: true, updated_at: new Date().toISOString() })
+          .eq('id', user.id);
+
+        if (!error) {
+          await refreshProfile();
+        }
+      } catch {
+        // Ignore OneSignal errors from the post-completion prompt.
+      }
+    };
+
+    requestPermission();
+  }, [user, profile?.push_enabled, refreshProfile]);
 
   return (
     <div className="min-h-screen gradient-dark pb-20">
