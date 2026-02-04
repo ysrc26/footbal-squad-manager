@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -9,7 +9,7 @@ import { LogOut, User, Settings, FileText, Home } from 'lucide-react';
 import Link from 'next/link';
 import { GameRegistration } from '@/components/game/GameRegistration';
 import { supabase } from '@/integrations/supabase/client';
-import { ensurePushOptIn, isPushSupported } from '@/lib/onesignal';
+import { ensurePushOptIn, getPushSubscriptionStatus, isPushSupported } from '@/lib/onesignal';
 import PushPromptModal from '@/components/PushPromptModal';
 import { toast } from 'sonner';
 
@@ -20,29 +20,44 @@ export default function Dashboard() {
   const { user, profile, isAdmin, signOut, refreshProfile } = useAuth();
   const [showPushModal, setShowPushModal] = useState(false);
   const [pushLoading, setPushLoading] = useState(false);
+  const promptCheckedRef = useRef(false);
 
   useEffect(() => {
     if (!user) return;
     if (typeof window === 'undefined') return;
+    if (promptCheckedRef.current) return;
+    promptCheckedRef.current = true;
+
     const pending = window.localStorage.getItem(PENDING_PUSH_KEY);
-    if (!pending) return;
 
-    if (profile?.push_enabled) return;
-    if (!isPushSupported()) {
+    const evaluatePrompt = async () => {
+      const userPromptKey = `${PUSH_PROMPTED_KEY}:${user.id}`;
+      const alreadyPrompted = window.localStorage.getItem(userPromptKey);
+
+      if (!isPushSupported()) {
+        window.localStorage.removeItem(PENDING_PUSH_KEY);
+        window.localStorage.setItem(userPromptKey, '1');
+        toast.message('התראות פוש אינן נתמכות במכשיר זה');
+        return;
+      }
+
+      const { optedIn, hasSubscription } = await getPushSubscriptionStatus();
+      const shouldPromptForDevice = !optedIn || !hasSubscription;
+      const shouldPromptAfterSignup = Boolean(pending);
+
+      if (!shouldPromptAfterSignup && !shouldPromptForDevice) {
+        return;
+      }
+
+      if (alreadyPrompted && !shouldPromptAfterSignup && !shouldPromptForDevice) {
+        return;
+      }
+
       window.localStorage.removeItem(PENDING_PUSH_KEY);
-      window.localStorage.setItem(PUSH_PROMPTED_KEY, '1');
-      toast.message('התראות פוש אינן נתמכות במכשיר זה');
-      return;
-    }
+      requestAnimationFrame(() => setShowPushModal(true));
+    };
 
-    const alreadyPrompted = window.localStorage.getItem(PUSH_PROMPTED_KEY);
-    if (alreadyPrompted) {
-      window.localStorage.removeItem(PENDING_PUSH_KEY);
-      return;
-    }
-
-    window.localStorage.removeItem(PENDING_PUSH_KEY);
-    setShowPushModal(true);
+    evaluatePrompt();
   }, [user, profile?.push_enabled, refreshProfile]);
 
   const handlePushConfirm = async () => {
@@ -70,7 +85,7 @@ export default function Dashboard() {
       setPushLoading(false);
       setShowPushModal(false);
       if (typeof window !== 'undefined') {
-        window.localStorage.setItem(PUSH_PROMPTED_KEY, '1');
+        window.localStorage.setItem(`${PUSH_PROMPTED_KEY}:${user.id}`, '1');
       }
     }
   };
@@ -78,7 +93,9 @@ export default function Dashboard() {
   const handlePushCancel = () => {
     setShowPushModal(false);
     if (typeof window !== 'undefined') {
-      window.localStorage.setItem(PUSH_PROMPTED_KEY, '1');
+      if (user) {
+        window.localStorage.setItem(`${PUSH_PROMPTED_KEY}:${user.id}`, '1');
+      }
     }
   };
 

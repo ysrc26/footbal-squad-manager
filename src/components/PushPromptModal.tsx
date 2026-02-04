@@ -20,19 +20,19 @@ export default function PushPromptModal({
 }: PushPromptModalProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle>הפעל התראות</DialogTitle>
-          <DialogDescription>
+      <DialogContent className="sm:max-w-md text-right" dir="rtl">
+        <DialogHeader className="text-right">
+          <DialogTitle className="text-right">הפעל התראות</DialogTitle>
+          <DialogDescription className="text-right">
             הפעל התראות כדי לקבל עדכונים על פתיחת הרשמה ותזכורות למשחק.
           </DialogDescription>
         </DialogHeader>
-        <DialogFooter className="gap-2 sm:gap-0">
-          <Button variant="ghost" onClick={onCancel} disabled={loading}>
-            לא עכשיו
-          </Button>
+        <DialogFooter className="gap-2 sm:gap-0 flex-row-reverse">
           <Button onClick={onConfirm} disabled={loading}>
             {loading ? 'מפעיל...' : 'הפעל'}
+          </Button>
+          <Button variant="ghost" onClick={onCancel} disabled={loading}>
+            לא עכשיו
           </Button>
         </DialogFooter>
       </DialogContent>

@@ -15,6 +15,8 @@ import { Label } from '@/components/ui/label';
 import { ensurePushOptIn, isPushSupported, optOutPush } from '@/lib/onesignal';
 import PushPromptModal from '@/components/PushPromptModal';
 
+const PUSH_PROMPTED_KEY = 'pushPrompted';
+
 const formatToLocal = (phone: string): string => {
   if (!phone) return '';
   if (phone.startsWith('+972')) {
@@ -177,6 +179,9 @@ export default function Profile() {
     } finally {
       setPushLoading(false);
       setShowPushModal(false);
+      if (typeof window !== 'undefined') {
+        window.localStorage.setItem(`${PUSH_PROMPTED_KEY}:${user.id}`, '1');
+      }
     }
   };
 
@@ -214,6 +219,7 @@ export default function Profile() {
         setPushEnabled(false);
         return;
       }
+      setPushEnabled(true);
       setShowPushModal(true);
       return;
     }
@@ -235,12 +241,18 @@ export default function Profile() {
           if (!open) {
             setShowPushModal(false);
             setPushEnabled(false);
+            if (user && typeof window !== 'undefined') {
+              window.localStorage.setItem(`${PUSH_PROMPTED_KEY}:${user.id}`, '1');
+            }
           }
         }}
         onConfirm={enablePush}
         onCancel={() => {
           setShowPushModal(false);
           setPushEnabled(false);
+          if (user && typeof window !== 'undefined') {
+            window.localStorage.setItem(`${PUSH_PROMPTED_KEY}:${user.id}`, '1');
+          }
         }}
         loading={pushLoading}
       />

@@ -161,3 +161,38 @@ export const ensurePushOptIn = async () => {
   await optInPush();
   return permission;
 };
+
+export const getPushSubscriptionStatus = async () => {
+  await initOneSignal();
+
+  let optedIn = false;
+  let subscriptionId: string | null = null;
+
+  await withOneSignal(async (os) => {
+    if (os.User?.PushSubscription) {
+      const optedInValue = os.User.PushSubscription.optedIn;
+      if (typeof optedInValue === "boolean") {
+        optedIn = optedInValue;
+      } else if (typeof optedInValue === "function") {
+        optedIn = await optedInValue();
+      }
+
+      const idValue = os.User.PushSubscription.id;
+      if (typeof idValue === "string") {
+        subscriptionId = idValue;
+      } else if (typeof idValue === "function") {
+        subscriptionId = await idValue();
+      }
+    }
+
+    if (!subscriptionId && typeof os.getUserId === "function") {
+      subscriptionId = await os.getUserId();
+    }
+  });
+
+  return {
+    optedIn,
+    hasSubscription: Boolean(subscriptionId),
+    subscriptionId,
+  };
+};
