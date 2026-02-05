@@ -20,7 +20,6 @@ import PushPromptModal from '@/components/PushPromptModal';
 import { toast } from 'sonner';
 import BottomNav from '@/components/BottomNav';
 
-const PENDING_PUSH_KEY = 'pendingPushPrompt';
 const PUSH_PROMPTED_KEY = 'pushPrompted';
 
 export default function Dashboard() {
@@ -39,16 +38,12 @@ export default function Dashboard() {
     promptCheckedRef.current = true;
 
     const userPromptKey = `${PUSH_PROMPTED_KEY}:${user.id}`;
-    const pending = window.localStorage.getItem(PENDING_PUSH_KEY);
-    const pushParam = searchParams.get('push');
+    const showPrompt = searchParams.get('show_prompt');
 
-    if (pending || pushParam === '1') {
-      window.localStorage.removeItem(PENDING_PUSH_KEY);
-      if (pushParam === '1') {
-        const params = new URLSearchParams(searchParams.toString());
-        params.delete('push');
-        router.replace(params.toString() ? `${pathname}?${params.toString()}` : pathname);
-      }
+    if (showPrompt === 'true') {
+      const params = new URLSearchParams(searchParams.toString());
+      params.delete('show_prompt');
+      router.replace(params.toString() ? `${pathname}?${params.toString()}` : pathname);
       if (!isPushSupported()) {
         window.localStorage.setItem(userPromptKey, '1');
         toast.message('התראות פוש אינן נתמכות במכשיר זה');

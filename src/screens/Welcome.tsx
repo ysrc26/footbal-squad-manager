@@ -58,8 +58,6 @@ const formatToLocal = (phone: string): string => {
   return phone;
 };
 
-const PENDING_PUSH_KEY = 'pendingPushPrompt';
-
 export default function Welcome() {
   const { user, profile, refreshProfile, signOut } = useAuth();
   const router = useRouter();
@@ -217,8 +215,7 @@ export default function Welcome() {
     }
 
     await refreshProfile();
-    localStorage.setItem(PENDING_PUSH_KEY, '1');
-    router.replace('/dashboard?push=1');
+    router.replace('/dashboard?show_prompt=true');
     setSaving(false);
   };
 
