@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from 'react';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -9,9 +10,15 @@ import { LogOut, User, Settings, FileText, Home } from 'lucide-react';
 import Link from 'next/link';
 import { GameRegistration } from '@/components/game/GameRegistration';
 import { supabase } from '@/integrations/supabase/client';
-import { ensurePushOptIn, getPushSubscriptionStatus, isPushSupported } from '@/lib/onesignal';
+import {
+  ensurePushOptIn,
+  getPushSubscriptionStatus,
+  isPushSupported,
+  setOneSignalExternalUserId,
+} from '@/lib/onesignal';
 import PushPromptModal from '@/components/PushPromptModal';
 import { toast } from 'sonner';
+import BottomNav from '@/components/BottomNav';
 
 const PENDING_PUSH_KEY = 'pendingPushPrompt';
 const PUSH_PROMPTED_KEY = 'pushPrompted';
@@ -21,6 +28,9 @@ export default function Dashboard() {
   const [showPushModal, setShowPushModal] = useState(false);
   const [pushLoading, setPushLoading] = useState(false);
   const promptCheckedRef = useRef(false);
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const pathname = usePathname();
 
   useEffect(() => {
     if (!user) return;
@@ -30,9 +40,15 @@ export default function Dashboard() {
 
     const userPromptKey = `${PUSH_PROMPTED_KEY}:${user.id}`;
     const pending = window.localStorage.getItem(PENDING_PUSH_KEY);
+    const pushParam = searchParams.get('push');
 
-    if (pending) {
+    if (pending || pushParam === '1') {
       window.localStorage.removeItem(PENDING_PUSH_KEY);
+      if (pushParam === '1') {
+        const params = new URLSearchParams(searchParams.toString());
+        params.delete('push');
+        router.replace(params.toString() ? `${pathname}?${params.toString()}` : pathname);
+      }
       if (!isPushSupported()) {
         window.localStorage.setItem(userPromptKey, '1');
         toast.message('התראות פוש אינן נתמכות במכשיר זה');
@@ -68,6 +84,8 @@ export default function Dashboard() {
         toast.error('נדרש אישור התראות בדפדפן כדי להפעיל פוש');
         return;
       }
+
+      await setOneSignalExternalUserId(user.id);
 
       const { error } = await supabase
         .from('profiles')
@@ -123,8 +141,9 @@ export default function Dashboard() {
                 מנהל
               </Badge>
             )}
-            <Button variant="ghost" size="icon" onClick={signOut}>
+            <Button variant="ghost" onClick={signOut} className="gap-2">
               <LogOut className="h-5 w-5" />
+              התנתק
             </Button>
           </div>
         </div>
@@ -207,29 +226,7 @@ export default function Dashboard() {
         )}
       </main>
 
-      {/* Bottom Navigation */}
-      <nav className="fixed bottom-0 left-0 right-0 glass border-t border-border/50 backdrop-blur-xl">
-        <div className="container flex justify-around py-3">
-          <Link href="/" className="flex flex-col items-center gap-1 text-primary">
-            <Home className="h-6 w-6" />
-            <span className="text-xs">ראשי</span>
-          </Link>
-          <Link href="/profile" className="flex flex-col items-center gap-1 text-muted-foreground hover:text-primary transition-colors">
-            <User className="h-6 w-6" />
-            <span className="text-xs">פרופיל</span>
-          </Link>
-          <Link href="/rules" className="flex flex-col items-center gap-1 text-muted-foreground hover:text-primary transition-colors">
-            <FileText className="h-6 w-6" />
-            <span className="text-xs">חוקים</span>
-          </Link>
-          {isAdmin && (
-            <Link href="/admin" className="flex flex-col items-center gap-1 text-muted-foreground hover:text-primary transition-colors">
-              <Settings className="h-6 w-6" />
-              <span className="text-xs">ניהול</span>
-            </Link>
-          )}
-        </div>
-      </nav>
+      <BottomNav />
     </div>
   );
 }

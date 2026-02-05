@@ -12,7 +12,8 @@ import { toast } from 'sonner';
 import { ArrowRight, Bell, Camera, Loader2, LogOut, Phone, User, Home } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
-import { ensurePushOptIn, getPushSubscriptionStatus, isPushSupported, optOutPush } from '@/lib/onesignal';
+import { ensurePushOptIn, getPushSubscriptionStatus, isPushSupported, optOutPush, setOneSignalExternalUserId } from '@/lib/onesignal';
+import BottomNav from '@/components/BottomNav';
 import PushPromptModal from '@/components/PushPromptModal';
 
 const PUSH_PROMPTED_KEY = 'pushPrompted';
@@ -193,6 +194,8 @@ export default function Profile() {
         toast.error('נדרש אישור התראות בדפדפן כדי להפעיל פוש');
         return;
       }
+
+      await setOneSignalExternalUserId(user.id);
 
       const { error } = await supabase
         .from('profiles')
@@ -427,6 +430,7 @@ export default function Profile() {
           </CardContent>
         </Card>
       </main>
+      <BottomNav />
     </div>
   );
 }

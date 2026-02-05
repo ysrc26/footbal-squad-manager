@@ -6,19 +6,20 @@ import Link from 'next/link';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import { ArrowRight, Users, Settings, QrCode, FileText, Home, User, ChevronLeft, Calendar, Bell } from 'lucide-react';
+import { ArrowRight, Users, Settings, QrCode, FileText, Home, User, ChevronLeft, Calendar, Bell, LogOut } from 'lucide-react';
 import { UserManagement } from '@/components/admin/UserManagement';
 import { AppSettings } from '@/components/admin/AppSettings';
 import { QrCodeGenerator } from '@/components/admin/QrCodeGenerator';
 import { RulesEditor } from '@/components/admin/RulesEditor';
 import { GameManagement } from '@/components/admin/GameManagement';
 import { PushNotifications } from '@/components/admin/PushNotifications';
+import BottomNav from '@/components/BottomNav';
 
 type AdminView = 'menu' | 'users' | 'settings' | 'qr' | 'rules' | 'games' | 'push';
 
 export default function Admin() {
   const router = useRouter();
-  const { isAdmin } = useAuth();
+  const { isAdmin, signOut } = useAuth();
   const [currentView, setCurrentView] = useState<AdminView>('menu');
 
   const adminCards = [
@@ -152,6 +153,12 @@ export default function Admin() {
             <ArrowRight className="h-5 w-5" />
           </Button>
           <h1 className="text-xl font-bold mr-2">{getTitle()}</h1>
+          <div className="mr-auto">
+            <Button variant="ghost" onClick={signOut} className="gap-2">
+              <LogOut className="h-5 w-5" />
+              התנתק
+            </Button>
+          </div>
         </div>
       </header>
 
@@ -159,30 +166,7 @@ export default function Admin() {
       <main className="container px-4 py-6">
         {renderContent()}
       </main>
-
-      {/* Bottom Navigation */}
-      <nav className="fixed bottom-0 left-0 right-0 glass border-t border-border/50 backdrop-blur-xl">
-        <div className="container flex justify-around py-3">
-          <Link href="/" className="flex flex-col items-center gap-1 text-muted-foreground hover:text-primary transition-colors">
-            <Home className="h-6 w-6" />
-            <span className="text-xs">ראשי</span>
-          </Link>
-          <Link href="/profile" className="flex flex-col items-center gap-1 text-muted-foreground hover:text-primary transition-colors">
-            <User className="h-6 w-6" />
-            <span className="text-xs">פרופיל</span>
-          </Link>
-          <Link href="/rules" className="flex flex-col items-center gap-1 text-muted-foreground hover:text-primary transition-colors">
-            <FileText className="h-6 w-6" />
-            <span className="text-xs">חוקים</span>
-          </Link>
-          {isAdmin && (
-            <Link href="/admin" className="flex flex-col items-center gap-1 text-primary">
-              <Settings className="h-6 w-6" />
-              <span className="text-xs">ניהול</span>
-            </Link>
-          )}
-        </div>
-      </nav>
+      <BottomNav />
     </div>
   );
 }

@@ -272,6 +272,7 @@ serve(async (req) => {
   const oneSignalPayload: Record<string, unknown> = {
     app_id: ONESIGNAL_APP_ID,
     include_external_user_ids: recipients,
+    channel_for_external_user_ids: "push",
     headings: { en: title },
     contents: { en: messageBody },
   };

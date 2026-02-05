@@ -218,7 +218,7 @@ export default function Welcome() {
 
     await refreshProfile();
     localStorage.setItem(PENDING_PUSH_KEY, '1');
-    router.replace('/dashboard');
+    router.replace('/dashboard?push=1');
     setSaving(false);
   };
 
