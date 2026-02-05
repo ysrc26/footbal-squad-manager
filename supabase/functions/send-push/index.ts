@@ -1,7 +1,7 @@
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.93.3";
 
-type Audience = "user" | "all" | "admins" | "game_active" | "game_standby";
+type Audience = "user" | "all" | "admins" | "game_registered";
 
 type EventType = "promotion" | "game_open" | "game_cancelled" | "manual" | "reminder";
 
@@ -40,8 +40,7 @@ const supabaseAuth = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
 const audienceRequiringAdmin = new Set<Audience>([
   "all",
   "admins",
-  "game_active",
-  "game_standby",
+  "game_registered",
 ]);
 
 const jsonResponse = (body: unknown, status = 200) =>
@@ -91,7 +90,7 @@ const filterPushEnabled = async (userIds: string[]) => {
   }
 
   return data
-    .filter((row) => row.push_enabled !== false)
+    .filter((row) => row.push_enabled === true)
     .map((row) => row.id as string);
 };
 
@@ -110,7 +109,7 @@ const fetchAllPushEnabledUsers = async () => {
       break;
     }
 
-    ids.push(...data.filter((row) => row.push_enabled !== false).map((row) => row.id as string));
+    ids.push(...data.filter((row) => row.push_enabled === true).map((row) => row.id as string));
 
     if (data.length < pageSize) {
       break;
@@ -134,12 +133,12 @@ const fetchAdminUserIds = async () => {
   return await filterPushEnabled(adminIds);
 };
 
-const fetchGameUserIds = async (gameId: string, status: "active" | "standby") => {
+const fetchGameUserIds = async (gameId: string) => {
   const { data, error } = await supabaseAdmin
     .from("registrations")
-    .select("user_id")
+    .select("user_id, status")
     .eq("game_id", gameId)
-    .eq("status", status);
+    .in("status", ["active", "standby"]);
 
   if (error || !data) return [];
 
@@ -190,7 +189,7 @@ serve(async (req) => {
     return jsonResponse({ error: "user_ids is required for audience=user" }, 400);
   }
 
-  if ((audience === "game_active" || audience === "game_standby") && !game_id) {
+  if (audience === "game_registered" && !game_id) {
     return jsonResponse({ error: "game_id is required for game audience" }, 400);
   }
 
@@ -253,11 +252,8 @@ serve(async (req) => {
     case "all":
       recipients = await fetchAllPushEnabledUsers();
       break;
-    case "game_active":
-      recipients = await fetchGameUserIds(game_id as string, "active");
-      break;
-    case "game_standby":
-      recipients = await fetchGameUserIds(game_id as string, "standby");
+    case "game_registered":
+      recipients = await fetchGameUserIds(game_id as string);
       break;
     default:
       recipients = [];
@@ -272,6 +268,7 @@ serve(async (req) => {
   const oneSignalPayload: Record<string, unknown> = {
     app_id: ONESIGNAL_APP_ID,
     include_external_user_ids: recipients,
+    channel_for_external_user_ids: "push",
     headings: { en: title },
     contents: { en: messageBody },
   };

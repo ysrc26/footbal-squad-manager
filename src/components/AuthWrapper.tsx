@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, type ReactNode } from 'react';
-import { useRouter } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { Loader2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
@@ -17,28 +17,29 @@ export default function AuthWrapper({ children, requireAdmin = false }: AuthWrap
   const [checkingProfile, setCheckingProfile] = useState(false);
   const [redirecting, setRedirecting] = useState(false);
   const router = useRouter();
+  const pathname = usePathname();
 
   useEffect(() => {
-    // הוספנו תנאי: תריץ את זה רק אם אנחנו לא כבר בודקים
     if (!loading && user && !profile && !checkingProfile) {
       setCheckingProfile(true);
-      
+
       const ensureProfile = async () => {
         try {
-          const { error } = await supabase.from('profiles').upsert({
-            id: user.id,
-            full_name: user.user_metadata?.full_name ?? user.user_metadata?.name ?? null,
-            avatar_url: user.user_metadata?.avatar_url ?? null,
-            // אנחנו לא דורסים את הטלפון אם הוא קיים, ה-upsert מטפל בזה
-          }, { onConflict: 'id' }); // חשוב לוודא שלא נוצרות כפילויות
+          const { error } = await supabase.from('profiles').upsert(
+            {
+              id: user.id,
+              full_name: user.user_metadata?.full_name ?? user.user_metadata?.name ?? null,
+              avatar_url: user.user_metadata?.avatar_url ?? null,
+              phone_number: user.phone ?? null,
+            },
+            { onConflict: 'id' }
+          );
 
           if (error) throw error;
-          
-          // מושכים את הפרופיל העדכני מיד אחרי היצירה
+
           await refreshProfile();
-          
         } catch (error: any) {
-          console.error("Profile creation error:", error);
+          console.error('Profile creation error:', error);
           toast.error('שגיאה ביצירת פרופיל משתמש');
         } finally {
           setCheckingProfile(false);
@@ -50,6 +51,21 @@ export default function AuthWrapper({ children, requireAdmin = false }: AuthWrap
   }, [loading, user, profile, checkingProfile, refreshProfile]);
 
   useEffect(() => {
+    if (!user || !profile) return;
+    if (!user.phone || profile.phone_number) return;
+
+    const syncPhone = async () => {
+      await supabase
+        .from('profiles')
+        .update({ phone_number: user.phone, updated_at: new Date().toISOString() })
+        .eq('id', user.id);
+      await refreshProfile();
+    };
+
+    syncPhone();
+  }, [user, profile, refreshProfile]);
+
+  useEffect(() => {
     if (loading || checkingProfile) return;
 
     if (!user) {
@@ -58,22 +74,40 @@ export default function AuthWrapper({ children, requireAdmin = false }: AuthWrap
       return;
     }
 
-    if (!profile?.phone_number) {
+    if (!profile) {
+      setRedirecting(false);
+      return;
+    }
+
+    const hasFullName = Boolean(profile.full_name?.trim());
+    const hasVerifiedPhone = Boolean(user.phone);
+    const onWelcome = pathname === '/welcome';
+
+    if (!hasVerifiedPhone || !hasFullName) {
+      if (!onWelcome) {
+        setRedirecting(true);
+        router.replace('/welcome');
+        return;
+      }
+      setRedirecting(false);
+      return;
+    }
+
+    if (onWelcome) {
       setRedirecting(true);
-      router.replace('/onboarding');
+      router.replace('/dashboard');
       return;
     }
 
     if (requireAdmin && !isAdmin) {
       setRedirecting(true);
-      router.replace('/');
+      router.replace('/dashboard');
       return;
     }
 
     setRedirecting(false);
-  }, [loading, checkingProfile, user, profile?.phone_number, requireAdmin, isAdmin, router]);
+  }, [loading, checkingProfile, user, user?.phone, profile?.full_name, requireAdmin, isAdmin, router, pathname]);
 
-  // 1. קודם כל מטפלים בטעינה הכללית
   if (loading || checkingProfile || redirecting) {
     return (
       <div className="min-h-screen flex items-center justify-center gradient-dark">
@@ -82,8 +116,6 @@ export default function AuthWrapper({ children, requireAdmin = false }: AuthWrap
     );
   }
 
-  // 2. אם יש יוזר אבל הפרופיל עדיין לא נטען (למרות שסיימנו loading)
-  // זה אומר שאנחנו בשלב ביניים - עדיף להציג טעינה מאשר לזרוק החוצה
   if (!profile) {
     return (
       <div className="min-h-screen flex items-center justify-center gradient-dark">

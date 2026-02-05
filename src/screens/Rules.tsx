@@ -5,10 +5,13 @@ import { useRouter } from 'next/navigation';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { ArrowRight, FileText, Loader2 } from 'lucide-react';
+import { ArrowRight, FileText, Loader2, LogOut } from 'lucide-react';
+import { useAuth } from '@/contexts/AuthContext';
+import BottomNav from '@/components/BottomNav';
 
 export default function Rules() {
   const router = useRouter();
+  const { signOut } = useAuth();
   const [rules, setRules] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -37,6 +40,12 @@ export default function Rules() {
             <ArrowRight className="h-5 w-5" />
           </Button>
           <h1 className="text-xl font-bold mr-2">חוקי המשחק</h1>
+          <div className="mr-auto">
+            <Button variant="ghost" onClick={signOut} className="gap-2">
+              <LogOut className="h-5 w-5" />
+              התנתק
+            </Button>
+          </div>
         </div>
       </header>
 
@@ -104,6 +113,7 @@ export default function Rules() {
           </CardContent>
         </Card>
       </main>
+      <BottomNav />
     </div>
   );
 }

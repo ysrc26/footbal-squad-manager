@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from 'react';
+import { useEffect, useRef, useState, type ChangeEvent, type FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
@@ -9,48 +9,96 @@ import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
-import { Loader2, ArrowRight, User, Phone, Home, Camera, Bell } from 'lucide-react';
+import { ArrowRight, Bell, Camera, Loader2, LogOut, Phone, User, Home } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
-import { initOneSignal, isPushSupported, optInPush, optOutPush, requestPushPermission } from '@/lib/onesignal';
+import { ensurePushOptIn, getPushSubscriptionStatus, isPushSupported, optOutPush, setOneSignalExternalUserId } from '@/lib/onesignal';
+import BottomNav from '@/components/BottomNav';
+import PushPromptModal from '@/components/PushPromptModal';
+
+const PUSH_PROMPTED_KEY = 'pushPrompted';
+
+const formatToLocal = (phone: string): string => {
+  if (!phone) return '';
+  if (phone.startsWith('+972')) {
+    return `0${phone.slice(4)}`;
+  }
+  return phone;
+};
 
 export default function Profile() {
-  const { user, profile, refreshProfile } = useAuth();
+  const { user, profile, refreshProfile, signOut } = useAuth();
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const [signingOut, setSigningOut] = useState(false);
   const [fullName, setFullName] = useState('');
-  const [isResident, setIsResident] = useState(false);
-  const [pushEnabled, setPushEnabled] = useState(true);
+  const [pushEnabled, setPushEnabled] = useState(false);
   const [pushLoading, setPushLoading] = useState(false);
-  const [pushSupported, setPushSupported] = useState(true);
+  const [pushSupported, setPushSupported] = useState(() => isPushSupported());
+  const [showPushModal, setShowPushModal] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const nameTouchedRef = useRef(false);
 
   useEffect(() => {
-    if (profile) {
-      setFullName(profile.full_name || '');
-      setIsResident(profile.is_resident || false);
-      setPushEnabled(profile.push_enabled ?? true);
+    if (!profile || !user) return;
+
+    if (!nameTouchedRef.current) {
+      const metadataName =
+        user.user_metadata?.full_name ?? user.user_metadata?.name ?? '';
+      setFullName(profile.full_name || metadataName || '');
     }
-  }, [profile]);
+
+    setPushEnabled(profile.push_enabled ?? false);
+  }, [profile, user]);
 
   useEffect(() => {
     setPushSupported(isPushSupported());
   }, []);
 
-  // Check if this is first time setup (no name set yet)
-  const isFirstTimeSetup = !profile?.full_name;
+  useEffect(() => {
+    let active = true;
+    if (!user) return () => {
+      active = false;
+    };
+    if (!profile?.push_enabled) {
+      setPushEnabled(false);
+      return () => {
+        active = false;
+      };
+    }
+    if (!isPushSupported()) {
+      setPushEnabled(false);
+      return () => {
+        active = false;
+      };
+    }
+
+    getPushSubscriptionStatus()
+      .then(({ optedIn, hasSubscription }) => {
+        if (!active) return;
+        setPushEnabled(optedIn && hasSubscription);
+      })
+      .catch(() => {
+        if (!active) return;
+        setPushEnabled(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [user?.id, profile?.push_enabled]);
+
+  const phoneDisplay = formatToLocal(user?.phone ?? profile?.phone_number ?? '');
 
   const uploadAvatar = async (file: File) => {
     if (!user) return;
 
-    // Validate file type
     if (!file.type.startsWith('image/')) {
       toast.error('יש להעלות קובץ תמונה בלבד');
       return;
     }
 
-    // Validate file size (max 5MB)
     if (file.size > 5 * 1024 * 1024) {
       toast.error('גודל הקובץ מקסימלי הוא 5MB');
       return;
@@ -61,19 +109,16 @@ export default function Profile() {
       const fileExt = file.name.split('.').pop();
       const fileName = `${user.id}/${Date.now()}.${fileExt}`;
 
-      // Upload to Storage
       const { error: uploadError } = await supabase.storage
         .from('avatars')
         .upload(fileName, file, { upsert: true });
 
       if (uploadError) throw uploadError;
 
-      // Get public URL
-      const { data: { publicUrl } } = supabase.storage
-        .from('avatars')
-        .getPublicUrl(fileName);
+      const {
+        data: { publicUrl },
+      } = supabase.storage.from('avatars').getPublicUrl(fileName);
 
-      // Update profile with new avatar URL
       const { error: updateError } = await supabase
         .from('profiles')
         .update({ avatar_url: publicUrl, updated_at: new Date().toISOString() })
@@ -90,108 +135,183 @@ export default function Profile() {
     }
   };
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
       uploadAvatar(file);
     }
   };
 
-  const handleSave = async (e: React.FormEvent) => {
+  const handleSave = async (e: FormEvent) => {
     e.preventDefault();
     if (!user) return;
-    
-    setLoading(true);
-    
-    // Only include is_resident on first time setup
-    const updateData: Record<string, unknown> = {
-      id: user.id,
-      full_name: fullName,
-      phone_number: user.phone || null,
-      updated_at: new Date().toISOString(),
-    };
-    
-    // Only set is_resident on first time setup
-    if (isFirstTimeSetup) {
-      updateData.is_resident = isResident;
+
+    if (!fullName.trim()) {
+      toast.error('יש להזין שם מלא');
+      return;
     }
-    
+
+    setLoading(true);
+
     const { error } = await supabase
       .from('profiles')
-      .upsert(updateData);
-    
+      .update({
+        full_name: fullName.trim(),
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', user.id);
+
     if (error) {
       toast.error('שגיאה בשמירת הפרופיל', {
         description: error.message,
       });
     } else {
+      const { error: authError } = await supabase.auth.updateUser({
+        data: { full_name: fullName.trim() },
+      });
+
+      if (authError) {
+        toast.error('שגיאה בעדכון שם המשתמש', {
+          description: authError.message,
+        });
+        setLoading(false);
+        return;
+      }
+
       toast.success('הפרופיל נשמר בהצלחה!');
       await refreshProfile();
     }
     setLoading(false);
   };
 
-  const handlePushToggle = async (enabled: boolean) => {
+  const enablePush = async () => {
     if (!user) return;
 
     setPushLoading(true);
     try {
-      await initOneSignal();
-
-      if (enabled) {
-        const permission = await requestPushPermission();
-        if (permission !== 'granted') {
-          toast.error('נדרש אישור התראות בדפדפן כדי להפעיל פוש');
-          setPushEnabled(false);
-          return;
-        }
-
-        await optInPush();
-      } else {
-        await optOutPush();
+      const permission = await ensurePushOptIn();
+      if (permission !== 'granted') {
+        toast.error('נדרש אישור התראות בדפדפן כדי להפעיל פוש');
+        return;
       }
+
+      await setOneSignalExternalUserId(user.id);
 
       const { error } = await supabase
         .from('profiles')
-        .update({ push_enabled: enabled, updated_at: new Date().toISOString() })
+        .update({ push_enabled: true, updated_at: new Date().toISOString() })
         .eq('id', user.id);
 
       if (error) throw error;
 
-      setPushEnabled(enabled);
+      setPushEnabled(true);
       await refreshProfile();
-      toast.success(enabled ? 'התראות פוש הופעלו' : 'התראות פוש הושבתו');
+      toast.success('התראות פוש הופעלו');
+    } catch (error: any) {
+      toast.error('שגיאה בהפעלת התראות פוש', {
+        description: error.message,
+      });
+      setPushEnabled(false);
+    } finally {
+      setPushLoading(false);
+      setShowPushModal(false);
+      if (typeof window !== 'undefined') {
+        window.localStorage.setItem(`${PUSH_PROMPTED_KEY}:${user.id}`, '1');
+      }
+    }
+  };
+
+  const disablePush = async () => {
+    if (!user) return;
+
+    setPushLoading(true);
+    try {
+      await optOutPush();
+
+      setPushEnabled(false);
+      toast.success('התראות פוש הושבתו');
     } catch (error: any) {
       toast.error('שגיאה בעדכון התראות פוש', {
         description: error.message,
       });
-      setPushEnabled(profile?.push_enabled ?? true);
+      setPushEnabled(false);
     } finally {
       setPushLoading(false);
+      if (typeof window !== 'undefined') {
+        window.localStorage.setItem(`${PUSH_PROMPTED_KEY}:${user.id}`, '1');
+      }
     }
+  };
+
+  const handlePushToggle = (enabled: boolean) => {
+    if (enabled) {
+      if (!pushSupported) {
+        toast.message('התראות פוש אינן נתמכות במכשיר זה');
+        setPushEnabled(false);
+        return;
+      }
+      setPushEnabled(true);
+      setShowPushModal(true);
+      return;
+    }
+
+    disablePush();
+  };
+
+  const handleSignOut = async () => {
+    setSigningOut(true);
+    await signOut();
+    router.replace('/login');
   };
 
   return (
     <div className="min-h-screen gradient-dark">
-      {/* Header */}
+      <PushPromptModal
+        open={showPushModal}
+        onOpenChange={(open) => {
+          if (!open) {
+            setShowPushModal(false);
+            setPushEnabled(false);
+            if (user && typeof window !== 'undefined') {
+              window.localStorage.setItem(`${PUSH_PROMPTED_KEY}:${user.id}`, '1');
+            }
+          }
+        }}
+        onConfirm={enablePush}
+        onCancel={() => {
+          setShowPushModal(false);
+          setPushEnabled(false);
+          if (user && typeof window !== 'undefined') {
+            window.localStorage.setItem(`${PUSH_PROMPTED_KEY}:${user.id}`, '1');
+          }
+        }}
+        loading={pushLoading}
+      />
       <header className="sticky top-0 z-50 glass border-b border-border/50 backdrop-blur-xl">
         <div className="container flex items-center h-16 px-4">
           <Button variant="ghost" size="icon" onClick={() => router.back()}>
             <ArrowRight className="h-5 w-5" />
           </Button>
-          <h1 className="text-xl font-bold mr-2">פרופיל</h1>
+          <h1 className="text-xl font-bold mr-2 flex-1">פרופיל</h1>
+          <Button
+            variant="ghost"
+            className="gap-2"
+            onClick={handleSignOut}
+            disabled={signingOut}
+          >
+            <LogOut className="h-4 w-4" />
+            התנתק
+          </Button>
         </div>
       </header>
 
-      {/* Main Content */}
       <main className="container px-4 py-6">
         <Card className="glass neon-border animate-fade-in">
           <CardHeader className="text-center">
-            {/* Avatar Section */}
             <div className="mx-auto relative">
               {profile?.avatar_url ? (
-                <img 
-                  src={profile.avatar_url} 
+                <img
+                  src={profile.avatar_url}
                   alt="תמונת פרופיל"
                   className="w-24 h-24 rounded-full object-cover border-2 border-primary/50"
                 />
@@ -237,8 +357,12 @@ export default function Profile() {
                   id="fullName"
                   placeholder="הזן את שמך המלא"
                   value={fullName}
-                  onChange={(e) => setFullName(e.target.value)}
+                  onChange={(e) => {
+                    nameTouchedRef.current = true;
+                    setFullName(e.target.value);
+                  }}
                   className="h-12"
+                  required
                 />
               </div>
 
@@ -248,48 +372,28 @@ export default function Profile() {
                   מספר טלפון
                 </Label>
                 <Input
-                  value={user?.phone || ''}
-                  disabled
+                  value={phoneDisplay}
+                  placeholder="0501234567"
                   className="h-12 bg-muted"
                   dir="ltr"
+                  disabled
                 />
               </div>
 
-              {isFirstTimeSetup ? (
-                <div className="flex items-center justify-between p-4 rounded-lg bg-secondary/50">
-                  <div className="flex items-center gap-3">
-                    <Home className="h-5 w-5 text-primary" />
-                    <div>
-                      <Label htmlFor="isResident" className="text-base font-medium cursor-pointer">
-                        תושב נחלים
-                      </Label>
-                      <p className="text-sm text-muted-foreground">
-                        תושבים מקבלים עדיפות בהרשמה
-                      </p>
-                    </div>
+              <div className="flex items-center justify-between p-4 rounded-lg bg-muted/50">
+                <div className="flex items-center gap-3">
+                  <Home className="h-5 w-5 text-muted-foreground" />
+                  <div>
+                    <span className="text-base font-medium">תושב נחלים</span>
+                    <p className="text-sm text-muted-foreground">
+                      {profile?.is_resident ? 'כן' : 'לא'} - לשינוי פנה למנהל
+                    </p>
                   </div>
-                  <Switch
-                    id="isResident"
-                    checked={isResident}
-                    onCheckedChange={setIsResident}
-                  />
                 </div>
-              ) : (
-                <div className="flex items-center justify-between p-4 rounded-lg bg-muted/50">
-                  <div className="flex items-center gap-3">
-                    <Home className="h-5 w-5 text-muted-foreground" />
-                    <div>
-                      <span className="text-base font-medium">תושב נחלים</span>
-                      <p className="text-sm text-muted-foreground">
-                        {profile?.is_resident ? 'כן' : 'לא'} - לשינוי פנה למנהל
-                      </p>
-                    </div>
-                  </div>
-                  <Badge variant={profile?.is_resident ? 'default' : 'secondary'}>
-                    {profile?.is_resident ? 'תושב' : 'לא תושב'}
-                  </Badge>
-                </div>
-              )}
+                <Badge variant={profile?.is_resident ? 'default' : 'secondary'}>
+                  {profile?.is_resident ? 'תושב' : 'לא תושב'}
+                </Badge>
+              </div>
 
               <div className="flex items-center justify-between p-4 rounded-lg bg-secondary/50">
                 <div className="flex items-center gap-3">
@@ -311,8 +415,8 @@ export default function Profile() {
                 />
               </div>
 
-              <Button 
-                type="submit" 
+              <Button
+                type="submit"
                 className="w-full h-12 text-lg font-semibold neon-glow"
                 disabled={loading}
               >
@@ -326,6 +430,7 @@ export default function Profile() {
           </CardContent>
         </Card>
       </main>
+      <BottomNav />
     </div>
   );
 }

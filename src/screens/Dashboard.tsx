@@ -1,5 +1,7 @@
 "use client";
 
+import { useEffect, useState } from 'react';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -7,12 +9,122 @@ import { Badge } from '@/components/ui/badge';
 import { LogOut, User, Settings, FileText, Home } from 'lucide-react';
 import Link from 'next/link';
 import { GameRegistration } from '@/components/game/GameRegistration';
+import { supabase } from '@/integrations/supabase/client';
+import {
+  ensurePushOptIn,
+  getPushSubscriptionStatus,
+  isPushSupported,
+  setOneSignalExternalUserId,
+} from '@/lib/onesignal';
+import PushPromptModal from '@/components/PushPromptModal';
+import { toast } from 'sonner';
+import BottomNav from '@/components/BottomNav';
+
+const PUSH_PROMPTED_KEY = 'pushPrompted';
 
 export default function Dashboard() {
-  const { user, profile, isAdmin, signOut } = useAuth();
+  const { user, profile, isAdmin, signOut, refreshProfile } = useAuth();
+  const [showPushModal, setShowPushModal] = useState(false);
+  const [pushLoading, setPushLoading] = useState(false);
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const pathname = usePathname();
+
+  useEffect(() => {
+    if (!user) return;
+    if (typeof window === 'undefined') return;
+    const userPromptKey = `${PUSH_PROMPTED_KEY}:${user.id}`;
+    const showPrompt = searchParams.get('show_prompt');
+
+    if (showPrompt !== 'true') return;
+
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete('show_prompt');
+    router.replace(params.toString() ? `${pathname}?${params.toString()}` : pathname);
+    if (!isPushSupported()) {
+      window.localStorage.setItem(userPromptKey, '1');
+      toast.message('התראות פוש אינן נתמכות במכשיר זה');
+      return;
+    }
+    requestAnimationFrame(() => setShowPushModal(true));
+  }, [user, searchParams, pathname, router]);
+
+  useEffect(() => {
+    if (!user) return;
+    if (typeof window === 'undefined') return;
+    if (!profile?.push_enabled) return;
+    if (!isPushSupported()) return;
+
+    const userPromptKey = `${PUSH_PROMPTED_KEY}:${user.id}`;
+    const alreadyPrompted = window.localStorage.getItem(userPromptKey);
+    if (alreadyPrompted) return;
+
+    const evaluateDevicePrompt = async () => {
+      const { optedIn, hasSubscription } = await getPushSubscriptionStatus();
+      const shouldPromptForDevice = !optedIn || !hasSubscription;
+      if (!shouldPromptForDevice) return;
+      requestAnimationFrame(() => setShowPushModal(true));
+    };
+
+    evaluateDevicePrompt();
+  }, [user, profile?.push_enabled]);
+
+  const handlePushConfirm = async () => {
+    if (!user) return;
+    setPushLoading(true);
+    try {
+      const permission = await ensurePushOptIn();
+      if (permission !== 'granted') {
+        toast.error('נדרש אישור התראות בדפדפן כדי להפעיל פוש');
+        return;
+      }
+
+      await setOneSignalExternalUserId(user.id);
+
+      const { error } = await supabase
+        .from('profiles')
+        .update({ push_enabled: true, updated_at: new Date().toISOString() })
+        .eq('id', user.id);
+
+      if (!error) {
+        await refreshProfile();
+        toast.success('התראות פוש הופעלו');
+      }
+    } catch {
+      toast.error('שגיאה בהפעלת התראות פוש');
+    } finally {
+      setPushLoading(false);
+      setShowPushModal(false);
+      if (typeof window !== 'undefined') {
+        window.localStorage.setItem(`${PUSH_PROMPTED_KEY}:${user.id}`, '1');
+      }
+    }
+  };
+
+  const handlePushCancel = () => {
+    setShowPushModal(false);
+    if (typeof window !== 'undefined') {
+      if (user) {
+        window.localStorage.setItem(`${PUSH_PROMPTED_KEY}:${user.id}`, '1');
+      }
+    }
+  };
 
   return (
     <div className="min-h-screen gradient-dark pb-20">
+      <PushPromptModal
+        open={showPushModal}
+        onOpenChange={(open) => {
+          if (!open) {
+            handlePushCancel();
+            return;
+          }
+          setShowPushModal(true);
+        }}
+        onConfirm={handlePushConfirm}
+        onCancel={handlePushCancel}
+        loading={pushLoading}
+      />
       {/* Header */}
       <header className="sticky top-0 z-50 glass border-b border-border/50 backdrop-blur-xl">
         <div className="container flex items-center justify-between h-16 px-4">
@@ -23,8 +135,9 @@ export default function Dashboard() {
                 מנהל
               </Badge>
             )}
-            <Button variant="ghost" size="icon" onClick={signOut}>
+            <Button variant="ghost" onClick={signOut} className="gap-2">
               <LogOut className="h-5 w-5" />
+              התנתק
             </Button>
           </div>
         </div>
@@ -107,29 +220,7 @@ export default function Dashboard() {
         )}
       </main>
 
-      {/* Bottom Navigation */}
-      <nav className="fixed bottom-0 left-0 right-0 glass border-t border-border/50 backdrop-blur-xl">
-        <div className="container flex justify-around py-3">
-          <Link href="/" className="flex flex-col items-center gap-1 text-primary">
-            <Home className="h-6 w-6" />
-            <span className="text-xs">ראשי</span>
-          </Link>
-          <Link href="/profile" className="flex flex-col items-center gap-1 text-muted-foreground hover:text-primary transition-colors">
-            <User className="h-6 w-6" />
-            <span className="text-xs">פרופיל</span>
-          </Link>
-          <Link href="/rules" className="flex flex-col items-center gap-1 text-muted-foreground hover:text-primary transition-colors">
-            <FileText className="h-6 w-6" />
-            <span className="text-xs">חוקים</span>
-          </Link>
-          {isAdmin && (
-            <Link href="/admin" className="flex flex-col items-center gap-1 text-muted-foreground hover:text-primary transition-colors">
-              <Settings className="h-6 w-6" />
-              <span className="text-xs">ניהול</span>
-            </Link>
-          )}
-        </div>
-      </nav>
+      <BottomNav />
     </div>
   );
 }
