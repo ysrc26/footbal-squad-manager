@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
@@ -26,7 +26,6 @@ export default function Dashboard() {
   const { user, profile, isAdmin, signOut, refreshProfile } = useAuth();
   const [showPushModal, setShowPushModal] = useState(false);
   const [pushLoading, setPushLoading] = useState(false);
-  const promptCheckedRef = useRef(false);
   const searchParams = useSearchParams();
   const router = useRouter();
   const pathname = usePathname();
@@ -34,36 +33,36 @@ export default function Dashboard() {
   useEffect(() => {
     if (!user) return;
     if (typeof window === 'undefined') return;
-    if (promptCheckedRef.current) return;
-    promptCheckedRef.current = true;
-
     const userPromptKey = `${PUSH_PROMPTED_KEY}:${user.id}`;
     const showPrompt = searchParams.get('show_prompt');
 
-    if (showPrompt === 'true') {
-      const params = new URLSearchParams(searchParams.toString());
-      params.delete('show_prompt');
-      router.replace(params.toString() ? `${pathname}?${params.toString()}` : pathname);
-      if (!isPushSupported()) {
-        window.localStorage.setItem(userPromptKey, '1');
-        toast.message('התראות פוש אינן נתמכות במכשיר זה');
-        return;
-      }
-      requestAnimationFrame(() => setShowPushModal(true));
+    if (showPrompt !== 'true') return;
+
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete('show_prompt');
+    router.replace(params.toString() ? `${pathname}?${params.toString()}` : pathname);
+    if (!isPushSupported()) {
+      window.localStorage.setItem(userPromptKey, '1');
+      toast.message('התראות פוש אינן נתמכות במכשיר זה');
       return;
     }
+    requestAnimationFrame(() => setShowPushModal(true));
+  }, [user, searchParams, pathname, router]);
+
+  useEffect(() => {
+    if (!user) return;
+    if (typeof window === 'undefined') return;
+    if (!profile?.push_enabled) return;
+    if (!isPushSupported()) return;
+
+    const userPromptKey = `${PUSH_PROMPTED_KEY}:${user.id}`;
+    const alreadyPrompted = window.localStorage.getItem(userPromptKey);
+    if (alreadyPrompted) return;
 
     const evaluateDevicePrompt = async () => {
-      if (!profile?.push_enabled) return;
-      if (!isPushSupported()) return;
-
-      const alreadyPrompted = window.localStorage.getItem(userPromptKey);
-      if (alreadyPrompted) return;
-
       const { optedIn, hasSubscription } = await getPushSubscriptionStatus();
       const shouldPromptForDevice = !optedIn || !hasSubscription;
       if (!shouldPromptForDevice) return;
-
       requestAnimationFrame(() => setShowPushModal(true));
     };
 
