@@ -29,7 +29,18 @@ export default function PushPromptModal({
         </DialogHeader>
         <DialogFooter className="gap-2 sm:gap-0 flex-row-reverse">
           <Button onClick={onConfirm} disabled={loading}>
-            {loading ? 'מפעיל...' : 'הפעל'}
+            {loading ? (
+              <span className="inline-flex items-center gap-2">
+                <span>אנא המתן</span>
+                <span className="inline-flex items-center gap-0.5">
+                  <span className="animate-bounce">.</span>
+                  <span className="animate-bounce [animation-delay:0.15s]">.</span>
+                  <span className="animate-bounce [animation-delay:0.3s]">.</span>
+                </span>
+              </span>
+            ) : (
+              'הפעל'
+            )}
           </Button>
           <Button variant="ghost" onClick={onCancel} disabled={loading}>
             לא עכשיו
