@@ -6,10 +6,12 @@ import { useAuth } from '@/contexts/AuthContext';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { useGameRealtime, type GameRealtimeEvent } from '@/hooks/useGameRealtime';
 import { toast } from 'sonner';
 import { Loader2, Calendar, Clock, Users, UserPlus, UserMinus, CheckCircle2, QrCode } from 'lucide-react';
 import { QrScanner } from '@/components/QrScanner';
 import { PlayerList } from './PlayerList';
+import { LiveBadge } from './LiveBadge';
 import type { Tables } from '@/lib/database.types';
 
 type Game = Tables<'games'>;
@@ -35,7 +37,7 @@ export function GameRegistration() {
   const maxPlayersRaw = currentGame?.max_players ?? DEFAULT_MAX_PLAYERS;
   const maxPlayers = Math.max(0, maxPlayersRaw);
 
-  const fetchCurrentGame = async () => {
+  const fetchCurrentGame = useCallback(async () => {
     try {
       const today = new Date().toISOString().split('T')[0];
       const { data, error } = await supabase
@@ -54,7 +56,7 @@ export function GameRegistration() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   const fetchRegistrations = useCallback(async () => {
     if (!currentGame) return;
@@ -114,57 +116,93 @@ export function GameRegistration() {
 
   useEffect(() => {
     fetchCurrentGame();
-  }, []);
+  }, [fetchCurrentGame]);
 
   useEffect(() => {
-    const timer = setInterval(() => setNow(new Date()), 60_000);
-    return () => clearInterval(timer);
+    let intervalId: number | null = null;
+    let timeoutId: number | null = null;
+
+    const schedule = () => {
+      const nowDate = new Date();
+      setNow(nowDate);
+      const msToNextTick = 1000 - nowDate.getMilliseconds();
+      timeoutId = window.setTimeout(() => {
+        setNow(new Date());
+        intervalId = window.setInterval(() => setNow(new Date()), 1000);
+      }, msToNextTick);
+    };
+
+    schedule();
+
+    return () => {
+      if (timeoutId) {
+        window.clearTimeout(timeoutId);
+      }
+      if (intervalId) {
+        window.clearInterval(intervalId);
+      }
+    };
   }, []);
 
   useEffect(() => {
     if (currentGame) {
       fetchRegistrations();
-      // Subscribe to real-time updates
-      const channel = supabase
-        .channel('registrations-changes')
-        .on(
-          'postgres_changes',
-          {
-            event: '*',
-            schema: 'public',
-            table: 'registrations',
-            filter: `game_id=eq.${currentGame.id}`,
-          },
-          () => {
-            fetchRegistrations();
-          }
-        )
-        .subscribe();
-
-      return () => {
-        supabase.removeChannel(channel);
-      };
+    } else {
+      setRegistrations([]);
+      setUserRegistration(null);
     }
   }, [currentGame, fetchRegistrations]);
+
+  const handleRealtimeEvent = useCallback(
+    (event: GameRealtimeEvent) => {
+      if (event.type === 'registrations') {
+        fetchRegistrations();
+        return;
+      }
+
+      if (event.type === 'game_updated') {
+        fetchCurrentGame();
+        return;
+      }
+
+      if (event.type === 'game_deleted') {
+        setCurrentGame(null);
+        setRegistrations([]);
+        setUserRegistration(null);
+      }
+    },
+    [fetchRegistrations, fetchCurrentGame]
+  );
+
+  useGameRealtime(currentGame?.id ?? null, handleRealtimeEvent);
+
+  const parseGameTimestamp = (value?: string | null): Date | null => {
+    if (!currentGame || !value) return null;
+    const isoValue = value.includes('T') ? value : `${currentGame.date}T${value}`;
+    const date = new Date(isoValue);
+    if (Number.isNaN(date.getTime())) return null;
+    return date;
+  };
+
+  const wave1OpensAt = parseGameTimestamp(currentGame?.wave1_registration_opens_at);
+  const wave2OpensAt = parseGameTimestamp(currentGame?.registration_opens_at);
+  const kickoffAt = parseGameTimestamp(currentGame?.kickoff_time);
+  const isWave1Open = wave1OpensAt ? now >= wave1OpensAt : false;
+  const isWave2Open = wave2OpensAt ? now >= wave2OpensAt : false;
+  const checkInOpensAt = kickoffAt
+    ? new Date(kickoffAt.getTime() - 30 * 60 * 1000)
+    : null;
+  const isCheckInOpen = checkInOpensAt ? now >= checkInOpensAt : false;
+  const isGameLive = kickoffAt ? now >= kickoffAt : false;
 
   const canRegister = () => {
     if (!currentGame) return false;
 
     // Wave 2: Open for all - check timestamp first
-    if (currentGame.registration_opens_at) {
-      const wave2Opens = new Date(currentGame.registration_opens_at);
-      if (now >= wave2Opens) {
-        return true;
-      }
-    }
+    if (isWave2Open) return true;
 
     // Wave 1: Allow everyone to register, non-residents enter as waiting
-    if (currentGame.wave1_registration_opens_at) {
-      const wave1Opens = new Date(currentGame.wave1_registration_opens_at);
-      if (now >= wave1Opens) {
-        return true;
-      }
-    }
+    if (isWave1Open) return true;
     
     // Fallback to status field for backward compatibility
     if (currentGame.status === 'open_for_residents') {
@@ -178,19 +216,13 @@ export function GameRegistration() {
     if (!currentGame) return 'ההרשמה סגורה';
 
     // Wave 2: Open for all
-    if (currentGame.registration_opens_at) {
-      const wave2Opens = new Date(currentGame.registration_opens_at);
-      if (now >= wave2Opens) {
-        return 'הירשם למשחק';
-      }
+    if (isWave2Open) {
+      return 'הירשם למשחק';
     }
 
     // Wave 1: Residents + waiting list for non-residents
-    if (currentGame.wave1_registration_opens_at) {
-      const wave1Opens = new Date(currentGame.wave1_registration_opens_at);
-      if (now >= wave1Opens) {
-        return profile?.is_resident ? 'הירשם למשחק' : 'הירשם (בהמתנה)';
-      }
+    if (isWave1Open) {
+      return profile?.is_resident ? 'הירשם למשחק' : 'הירשם (בהמתנה)';
     }
     
     // Fallback to status field
@@ -213,12 +245,8 @@ export function GameRegistration() {
       return { allowed: false, message: 'המשחק בוטל' };
     }
 
-    if (currentGame.kickoff_time) {
-      const kickoff = new Date(currentGame.kickoff_time);
-      const opensAt = new Date(kickoff.getTime() - 30 * 60 * 1000);
-      if (now < opensAt) {
-        return { allowed: false, message: 'צ׳ק-אין נפתח חצי שעה לפני המשחק' };
-      }
+    if (kickoffAt && !isCheckInOpen) {
+      return { allowed: false, message: 'צ׳ק-אין נפתח חצי שעה לפני המשחק' };
     }
 
     return { allowed: true, message: 'סרוק QR לצ\'ק-אין' };
@@ -320,9 +348,6 @@ export function GameRegistration() {
     return `${hours}:${minutes}:${seconds}.${centiseconds}`;
   };
 
-  const wave2OpensAt = currentGame?.registration_opens_at
-    ? new Date(currentGame.registration_opens_at)
-    : null;
   const isBeforeWave2 = wave2OpensAt ? now < wave2OpensAt : false;
 
   const withWaitingStatus = (registration: Registration): Registration => ({
@@ -399,7 +424,10 @@ export function GameRegistration() {
               <Calendar className="h-5 w-5 text-primary" />
               המשחק הבא
             </CardTitle>
-            {getStatusBadge()}
+            <div className="flex items-center gap-2">
+              {isGameLive && <LiveBadge />}
+              {getStatusBadge()}
+            </div>
           </div>
           <CardDescription>{formatDate(currentGame.date)}</CardDescription>
         </CardHeader>

@@ -123,4 +123,26 @@
       hsl(var(--neon-green)) 0%, 
       hsl(var(--neon-green-glow)) 100%);
   }
+
+  @keyframes live-pulse {
+    0% {
+      transform: scale(1);
+      opacity: 1;
+      box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.8);
+    }
+    70% {
+      transform: scale(1.6);
+      opacity: 0;
+      box-shadow: 0 0 0 8px rgba(239, 68, 68, 0);
+    }
+    100% {
+      transform: scale(1.6);
+      opacity: 0;
+      box-shadow: 0 0 0 8px rgba(239, 68, 68, 0);
+    }
+  }
+
+  .live-pulse {
+    animation: live-pulse 1.2s ease-out infinite;
+  }
 }
