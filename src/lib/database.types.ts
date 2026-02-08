@@ -10,7 +10,8 @@ export type AppRole = 'admin' | 'moderator' | 'user';
 
 export type GameStatus = 'scheduled' | 'open_for_residents' | 'open_for_all' | 'closed' | 'completed' | 'cancelled';
 
-export type RegistrationStatus = 'active' | 'standby' | 'cancelled' | 'no_show';
+export type RegistrationStatus = 'active' | 'standby' | 'cancelled' | 'no_show' | 'finished';
+export type PromotionReason = 'checkin' | 'cancellation' | 'finishing' | 'resequence';
 
 export type CheckInStatus = 'pending' | 'checked_in' | 'no_show';
 
@@ -152,6 +153,8 @@ export interface Database {
           game_id: string
           status: RegistrationStatus
           check_in_status: CheckInStatus
+          check_in_at: string | null
+          promotion_reason: PromotionReason | null
           eta_minutes: number | null
           queue_position: number | null
           created_at: string
@@ -163,6 +166,8 @@ export interface Database {
           game_id: string
           status?: RegistrationStatus
           check_in_status?: CheckInStatus
+          check_in_at?: string | null
+          promotion_reason?: PromotionReason | null
           eta_minutes?: number | null
           queue_position?: number | null
           created_at?: string
@@ -174,6 +179,8 @@ export interface Database {
           game_id?: string
           status?: RegistrationStatus
           check_in_status?: CheckInStatus
+          check_in_at?: string | null
+          promotion_reason?: PromotionReason | null
           eta_minutes?: number | null
           queue_position?: number | null
           created_at?: string
@@ -208,6 +215,12 @@ export interface Database {
           promoted_registration_id: string | null
           promoted_user_id: string | null
         }[]
+      }
+      finish_registration_for_game: {
+        Args: {
+          _game_id: string
+        }
+        Returns: null
       }
       process_late_swaps: {
         Args: {
@@ -246,6 +259,7 @@ export interface Database {
       game_status: GameStatus
       registration_status: RegistrationStatus
       check_in_status: CheckInStatus
+      promotion_reason: PromotionReason
     }
   }
 }

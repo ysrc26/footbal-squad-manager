@@ -6,10 +6,12 @@ import { useAuth } from '@/contexts/AuthContext';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { useGameRealtime, type GameRealtimeEvent } from '@/hooks/useGameRealtime';
 import { toast } from 'sonner';
 import { Loader2, Calendar, Clock, Users, UserPlus, UserMinus, CheckCircle2, QrCode } from 'lucide-react';
 import { QrScanner } from '@/components/QrScanner';
 import { PlayerList } from './PlayerList';
+import { LiveBadge } from './LiveBadge';
 import type { Tables } from '@/lib/database.types';
 
 type Game = Tables<'games'>;
@@ -18,6 +20,7 @@ type Registration = Tables<'registrations'> & {
   avatar_url: string | null;
   is_resident?: boolean | null;
   is_waiting?: boolean;
+  display_position?: number;
 };
 
 // Fallback values for games without max_players/max_standby
@@ -30,12 +33,13 @@ export function GameRegistration() {
   const [userRegistration, setUserRegistration] = useState<Registration | null>(null);
   const [loading, setLoading] = useState(true);
   const [registering, setRegistering] = useState(false);
+  const [finishing, setFinishing] = useState(false);
   const [now, setNow] = useState(() => new Date());
 
   const maxPlayersRaw = currentGame?.max_players ?? DEFAULT_MAX_PLAYERS;
   const maxPlayers = Math.max(0, maxPlayersRaw);
 
-  const fetchCurrentGame = async () => {
+  const fetchCurrentGame = useCallback(async () => {
     try {
       const today = new Date().toISOString().split('T')[0];
       const { data, error } = await supabase
@@ -54,7 +58,7 @@ export function GameRegistration() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   const fetchRegistrations = useCallback(async () => {
     if (!currentGame) return;
@@ -65,7 +69,6 @@ export function GameRegistration() {
         .from('registrations')
         .select('*')
         .eq('game_id', currentGame.id)
-        .neq('status', 'cancelled')
         .order('queue_position', { ascending: true, nullsFirst: false })
         .order('created_at', { ascending: true });
 
@@ -104,8 +107,34 @@ export function GameRegistration() {
         is_resident: profilesMap.get(reg.user_id)?.is_resident ?? null,
       }));
 
-      setRegistrations(mergedRegistrations);
-      const myReg = user ? mergedRegistrations.find((r) => r.user_id === user.id) || null : null;
+      const activeOrStandby = mergedRegistrations.filter((r) => r.status === 'active' || r.status === 'standby');
+      const combinedSorted = activeOrStandby.slice().sort((a, b) => {
+        const aPos = a.queue_position ?? Number.MAX_SAFE_INTEGER;
+        const bPos = b.queue_position ?? Number.MAX_SAFE_INTEGER;
+        if (aPos !== bPos) return aPos - bPos;
+        return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+      });
+      const positionMap = new Map<string, number>();
+      combinedSorted.forEach((r, index) => {
+        positionMap.set(r.id, index + 1);
+      });
+      const withDisplayPosition = (registration: Registration): Registration => {
+        const fallbackPosition = positionMap.get(registration.id);
+        const validPosition =
+          typeof registration.queue_position === 'number' &&
+          registration.queue_position > 0 &&
+          registration.queue_position <= combinedSorted.length;
+        return {
+          ...registration,
+          display_position: validPosition ? registration.queue_position : fallbackPosition,
+        };
+      };
+
+      const registrationsWithPositions = mergedRegistrations.map(withDisplayPosition);
+      setRegistrations(registrationsWithPositions);
+      const myReg = user
+        ? registrationsWithPositions.find((r) => r.user_id === user.id && r.status !== 'cancelled') || null
+        : null;
       setUserRegistration(myReg);
     } catch (error: any) {
       console.error('Error fetching registrations:', error);
@@ -114,57 +143,93 @@ export function GameRegistration() {
 
   useEffect(() => {
     fetchCurrentGame();
-  }, []);
+  }, [fetchCurrentGame]);
 
   useEffect(() => {
-    const timer = setInterval(() => setNow(new Date()), 60_000);
-    return () => clearInterval(timer);
+    let intervalId: number | null = null;
+    let timeoutId: number | null = null;
+
+    const schedule = () => {
+      const nowDate = new Date();
+      setNow(nowDate);
+      const msToNextTick = 1000 - nowDate.getMilliseconds();
+      timeoutId = window.setTimeout(() => {
+        setNow(new Date());
+        intervalId = window.setInterval(() => setNow(new Date()), 1000);
+      }, msToNextTick);
+    };
+
+    schedule();
+
+    return () => {
+      if (timeoutId) {
+        window.clearTimeout(timeoutId);
+      }
+      if (intervalId) {
+        window.clearInterval(intervalId);
+      }
+    };
   }, []);
 
   useEffect(() => {
     if (currentGame) {
       fetchRegistrations();
-      // Subscribe to real-time updates
-      const channel = supabase
-        .channel('registrations-changes')
-        .on(
-          'postgres_changes',
-          {
-            event: '*',
-            schema: 'public',
-            table: 'registrations',
-            filter: `game_id=eq.${currentGame.id}`,
-          },
-          () => {
-            fetchRegistrations();
-          }
-        )
-        .subscribe();
-
-      return () => {
-        supabase.removeChannel(channel);
-      };
+    } else {
+      setRegistrations([]);
+      setUserRegistration(null);
     }
   }, [currentGame, fetchRegistrations]);
+
+  const handleRealtimeEvent = useCallback(
+    (event: GameRealtimeEvent) => {
+      if (event.type === 'registrations') {
+        fetchRegistrations();
+        return;
+      }
+
+      if (event.type === 'game_updated') {
+        fetchCurrentGame();
+        return;
+      }
+
+      if (event.type === 'game_deleted') {
+        setCurrentGame(null);
+        setRegistrations([]);
+        setUserRegistration(null);
+      }
+    },
+    [fetchRegistrations, fetchCurrentGame]
+  );
+
+  useGameRealtime(currentGame?.id ?? null, handleRealtimeEvent);
+
+  const parseGameTimestamp = (value?: string | null): Date | null => {
+    if (!currentGame || !value) return null;
+    const isoValue = value.includes('T') ? value : `${currentGame.date}T${value}`;
+    const date = new Date(isoValue);
+    if (Number.isNaN(date.getTime())) return null;
+    return date;
+  };
+
+  const wave1OpensAt = parseGameTimestamp(currentGame?.wave1_registration_opens_at);
+  const wave2OpensAt = parseGameTimestamp(currentGame?.registration_opens_at);
+  const kickoffAt = parseGameTimestamp(currentGame?.kickoff_time);
+  const isWave1Open = wave1OpensAt ? now >= wave1OpensAt : false;
+  const isWave2Open = wave2OpensAt ? now >= wave2OpensAt : false;
+  const checkInOpensAt = kickoffAt
+    ? new Date(kickoffAt.getTime() - 30 * 60 * 1000)
+    : null;
+  const isCheckInOpen = checkInOpensAt ? now >= checkInOpensAt : false;
+  const isGameLive = kickoffAt ? now >= kickoffAt : false;
 
   const canRegister = () => {
     if (!currentGame) return false;
 
     // Wave 2: Open for all - check timestamp first
-    if (currentGame.registration_opens_at) {
-      const wave2Opens = new Date(currentGame.registration_opens_at);
-      if (now >= wave2Opens) {
-        return true;
-      }
-    }
+    if (isWave2Open) return true;
 
     // Wave 1: Allow everyone to register, non-residents enter as waiting
-    if (currentGame.wave1_registration_opens_at) {
-      const wave1Opens = new Date(currentGame.wave1_registration_opens_at);
-      if (now >= wave1Opens) {
-        return true;
-      }
-    }
+    if (isWave1Open) return true;
     
     // Fallback to status field for backward compatibility
     if (currentGame.status === 'open_for_residents') {
@@ -178,19 +243,13 @@ export function GameRegistration() {
     if (!currentGame) return 'ההרשמה סגורה';
 
     // Wave 2: Open for all
-    if (currentGame.registration_opens_at) {
-      const wave2Opens = new Date(currentGame.registration_opens_at);
-      if (now >= wave2Opens) {
-        return 'הירשם למשחק';
-      }
+    if (isWave2Open) {
+      return 'הירשם למשחק';
     }
 
     // Wave 1: Residents + waiting list for non-residents
-    if (currentGame.wave1_registration_opens_at) {
-      const wave1Opens = new Date(currentGame.wave1_registration_opens_at);
-      if (now >= wave1Opens) {
-        return profile?.is_resident ? 'הירשם למשחק' : 'הירשם (בהמתנה)';
-      }
+    if (isWave1Open) {
+      return profile?.is_resident ? 'הירשם למשחק' : 'הירשם (בהמתנה)';
     }
     
     // Fallback to status field
@@ -213,12 +272,8 @@ export function GameRegistration() {
       return { allowed: false, message: 'המשחק בוטל' };
     }
 
-    if (currentGame.kickoff_time) {
-      const kickoff = new Date(currentGame.kickoff_time);
-      const opensAt = new Date(kickoff.getTime() - 30 * 60 * 1000);
-      if (now < opensAt) {
-        return { allowed: false, message: 'צ׳ק-אין נפתח חצי שעה לפני המשחק' };
-      }
+    if (kickoffAt && !isCheckInOpen) {
+      return { allowed: false, message: 'צ׳ק-אין נפתח חצי שעה לפני המשחק' };
     }
 
     return { allowed: true, message: 'סרוק QR לצ\'ק-אין' };
@@ -275,6 +330,27 @@ export function GameRegistration() {
     }
   };
 
+  const handleFinish = async () => {
+    if (!userRegistration || !user || !currentGame) return;
+    if (userRegistration.status !== 'active') return;
+
+    setFinishing(true);
+    try {
+      const { error } = await supabase.rpc('finish_registration_for_game', {
+        _game_id: currentGame.id,
+      });
+
+      if (error) throw error;
+
+      toast.success('סיימת את המשחק');
+      fetchRegistrations();
+    } catch (error: any) {
+      toast.error('שגיאה בעדכון סיום המשחק', { description: error.message });
+    } finally {
+      setFinishing(false);
+    }
+  };
+
   const getStatusBadge = () => {
     if (!currentGame) return null;
 
@@ -320,9 +396,6 @@ export function GameRegistration() {
     return `${hours}:${minutes}:${seconds}.${centiseconds}`;
   };
 
-  const wave2OpensAt = currentGame?.registration_opens_at
-    ? new Date(currentGame.registration_opens_at)
-    : null;
   const isBeforeWave2 = wave2OpensAt ? now < wave2OpensAt : false;
 
   const withWaitingStatus = (registration: Registration): Registration => ({
@@ -337,8 +410,8 @@ export function GameRegistration() {
     .filter((r) => r.status === 'active')
     .slice()
     .sort((a, b) => {
-      const aPos = a.queue_position ?? Number.MAX_SAFE_INTEGER;
-      const bPos = b.queue_position ?? Number.MAX_SAFE_INTEGER;
+      const aPos = a.display_position ?? a.queue_position ?? Number.MAX_SAFE_INTEGER;
+      const bPos = b.display_position ?? b.queue_position ?? Number.MAX_SAFE_INTEGER;
       if (aPos !== bPos) return aPos - bPos;
       return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
     })
@@ -348,13 +421,23 @@ export function GameRegistration() {
     .filter((r) => r.status === 'standby')
     .slice()
     .sort((a, b) => {
-      const aPos = a.queue_position ?? Number.MAX_SAFE_INTEGER;
-      const bPos = b.queue_position ?? Number.MAX_SAFE_INTEGER;
+      const aPos = a.display_position ?? a.queue_position ?? Number.MAX_SAFE_INTEGER;
+      const bPos = b.display_position ?? b.queue_position ?? Number.MAX_SAFE_INTEGER;
       if (aPos !== bPos) return aPos - bPos;
       return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
     })
     .map(withWaitingStatus);
+  const cancelledRegistrations = registrations
+    .filter((r) => r.status === 'cancelled')
+    .slice()
+    .sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime());
+  const finishedRegistrations = registrations
+    .filter((r) => r.status === 'finished')
+    .slice()
+    .sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime());
   const isRegistered = !!userRegistration;
+  const isFinished = userRegistration?.status === 'finished';
+  const isNoShow = userRegistration?.check_in_status === 'no_show';
   const isCheckedIn = userRegistration?.check_in_status === 'checked_in';
   const isUserWaiting =
     isBeforeWave2 &&
@@ -399,16 +482,27 @@ export function GameRegistration() {
               <Calendar className="h-5 w-5 text-primary" />
               המשחק הבא
             </CardTitle>
-            {getStatusBadge()}
+            <div className="flex items-center gap-2">
+              {isGameLive && <LiveBadge />}
+              {getStatusBadge()}
+            </div>
           </div>
           <CardDescription>{formatDate(currentGame.date)}</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           {/* Time Info */}
-          <div className="flex items-center gap-6 text-sm">
-            <div className="flex items-center gap-2">
-              <Clock className="h-4 w-4 text-muted-foreground" />
-              <span>התחלה: {formatTime(currentGame.kickoff_time)}</span>
+          <div className="flex flex-wrap items-center gap-6 text-sm">
+            <div className="flex flex-col gap-1">
+              <div className="flex items-center gap-2">
+                <Clock className="h-4 w-4 text-muted-foreground" />
+                <span>משחק ראשון: {formatTime(currentGame.kickoff_time)}</span>
+              </div>
+              {currentGame.deadline_time && (
+                <div className="flex items-center gap-2 text-muted-foreground">
+                  <Clock className="h-4 w-4 text-muted-foreground" />
+                  <span>שמירת מקומות עד: {formatTime(currentGame.deadline_time)}</span>
+                </div>
+              )}
             </div>
             <div className="flex items-center gap-2">
               <Users className="h-4 w-4 text-muted-foreground" />
@@ -423,20 +517,37 @@ export function GameRegistration() {
                 <CheckCircle2 className="h-5 w-5 text-primary" />
                 <div>
                   <p className="font-medium text-primary">
-                    {userRegistration.status === 'active' ? 'אתה רשום למשחק!' : 'אתה ברשימת ההמתנה'}
+                    {userRegistration.status === 'finished'
+                      ? 'סיימת את המשחק!'
+                      : userRegistration.status === 'active'
+                        ? 'אתה רשום למשחק!'
+                        : 'אתה ברשימת ההמתנה'}
                   </p>
-                  <p className="text-xs text-muted-foreground">
-                    מיקום בתור:{' '}
-                    {userRegistration.queue_position ??
-                      registrations.findIndex((r) => r.id === userRegistration.id) + 1}
-                  </p>
+                  {!isFinished && (
+                    <p className="text-xs text-muted-foreground">
+                      מיקומך בתור:{' '}
+                      {userRegistration.display_position ??
+                        userRegistration.queue_position ??
+                        registrations.findIndex((r) => r.id === userRegistration.id) + 1}
+                    </p>
+                  )}
                   <Badge variant="outline" className="mt-2 text-xs">
-                    נרשם בשעה {formatRegistrationTime(userRegistration.created_at)}
+                    נרשמת בשעה {formatRegistrationTime(userRegistration.created_at)}
                   </Badge>
-                  {isCheckedIn && (
-                    <Badge className="mt-1 bg-green-500/20 text-green-500 border-green-500/50">
-                      ✓ עשית צ&apos;ק-אין
+                  {isFinished ? (
+                    <Badge className="mt-1 bg-blue-600 text-white border-blue-600/70">
+                      סיימת את המשחק
                     </Badge>
+                  ) : isNoShow ? (
+                    <Badge className="mt-1 bg-red-600 text-white border-red-600/70">
+                      לא הגעת למשחק
+                    </Badge>
+                  ) : (
+                    isCheckedIn && (
+                      <Badge className="mt-1 bg-green-500/20 text-green-500 border-green-500/50">
+                        ✓ עשית צ&apos;ק-אין
+                      </Badge>
+                    )
                   )}
                   {isUserWaiting && (
                     <Badge className="mt-1 bg-amber-500/20 text-amber-600 border-amber-500/50">
@@ -469,6 +580,10 @@ export function GameRegistration() {
                 </>
               )}
             </Button>
+          ) : isFinished ? (
+            <div className="text-sm text-muted-foreground">
+              סיימת את המשחק להיום.
+            </div>
           ) : (
             <div className="space-y-2">
               {/* QR Scanner for Check-in - Available for any registered player who hasn't checked in */}
@@ -484,6 +599,20 @@ export function GameRegistration() {
                     {checkInStatus.message}
                   </Button>
                 )
+              )}
+              {isGameLive && userRegistration?.status === 'active' && (
+                <Button
+                  variant="secondary"
+                  onClick={handleFinish}
+                  disabled={finishing}
+                  className="w-full gap-2"
+                >
+                  {finishing ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    'סיימתי את המשחק'
+                  )}
+                </Button>
               )}
               {/* Cancel button - always available for registered players */}
               <Button
@@ -521,6 +650,24 @@ export function GameRegistration() {
           players={standbyRegistrations}
           showPosition
           emptyMessage="אין מזמינים"
+        />
+      )}
+
+      {cancelledRegistrations.length > 0 && (
+        <PlayerList
+          title="ביטלו הרשמה"
+          players={cancelledRegistrations}
+          showPosition={false}
+          emptyMessage="אין שחקנים שביטלו הרשמה"
+        />
+      )}
+
+      {finishedRegistrations.length > 0 && (
+        <PlayerList
+          title="סיימו"
+          players={finishedRegistrations}
+          showPosition={false}
+          emptyMessage="אין שחקנים שסיימו את המשחק"
         />
       )}
     </div>
