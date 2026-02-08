@@ -33,6 +33,7 @@ export function GameRegistration() {
   const [userRegistration, setUserRegistration] = useState<Registration | null>(null);
   const [loading, setLoading] = useState(true);
   const [registering, setRegistering] = useState(false);
+  const [finishing, setFinishing] = useState(false);
   const [now, setNow] = useState(() => new Date());
 
   const maxPlayersRaw = currentGame?.max_players ?? DEFAULT_MAX_PLAYERS;
@@ -329,6 +330,27 @@ export function GameRegistration() {
     }
   };
 
+  const handleFinish = async () => {
+    if (!userRegistration || !user || !currentGame) return;
+    if (userRegistration.status !== 'active') return;
+
+    setFinishing(true);
+    try {
+      const { error } = await supabase.rpc('finish_registration_for_game', {
+        _game_id: currentGame.id,
+      });
+
+      if (error) throw error;
+
+      toast.success('סיימת את המשחק');
+      fetchRegistrations();
+    } catch (error: any) {
+      toast.error('שגיאה בעדכון סיום המשחק', { description: error.message });
+    } finally {
+      setFinishing(false);
+    }
+  };
+
   const getStatusBadge = () => {
     if (!currentGame) return null;
 
@@ -409,7 +431,12 @@ export function GameRegistration() {
     .filter((r) => r.status === 'cancelled')
     .slice()
     .sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime());
+  const finishedRegistrations = registrations
+    .filter((r) => r.status === 'finished')
+    .slice()
+    .sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime());
   const isRegistered = !!userRegistration;
+  const isFinished = userRegistration?.status === 'finished';
   const isNoShow = userRegistration?.check_in_status === 'no_show';
   const isCheckedIn = userRegistration?.check_in_status === 'checked_in';
   const isUserWaiting =
@@ -482,20 +509,30 @@ export function GameRegistration() {
                 <CheckCircle2 className="h-5 w-5 text-primary" />
                 <div>
                   <p className="font-medium text-primary">
-                    {userRegistration.status === 'active' ? 'אתה רשום למשחק!' : 'אתה ברשימת ההמתנה'}
+                    {userRegistration.status === 'finished'
+                      ? 'סיימת את המשחק!'
+                      : userRegistration.status === 'active'
+                        ? 'אתה רשום למשחק!'
+                        : 'אתה ברשימת ההמתנה'}
                   </p>
-                  <p className="text-xs text-muted-foreground">
-                    מיקום בתור:{' '}
-                    {userRegistration.display_position ??
-                      userRegistration.queue_position ??
-                      registrations.findIndex((r) => r.id === userRegistration.id) + 1}
-                  </p>
+                  {!isFinished && (
+                    <p className="text-xs text-muted-foreground">
+                      מיקומך בתור:{' '}
+                      {userRegistration.display_position ??
+                        userRegistration.queue_position ??
+                        registrations.findIndex((r) => r.id === userRegistration.id) + 1}
+                    </p>
+                  )}
                   <Badge variant="outline" className="mt-2 text-xs">
-                    נרשם בשעה {formatRegistrationTime(userRegistration.created_at)}
+                    נרשמת בשעה {formatRegistrationTime(userRegistration.created_at)}
                   </Badge>
-                  {isNoShow ? (
+                  {isFinished ? (
+                    <Badge className="mt-1 bg-blue-600 text-white border-blue-600/70">
+                      סיימת את המשחק
+                    </Badge>
+                  ) : isNoShow ? (
                     <Badge className="mt-1 bg-red-600 text-white border-red-600/70">
-                      לא הגיע
+                      לא הגעת למשחק
                     </Badge>
                   ) : (
                     isCheckedIn && (
@@ -535,6 +572,10 @@ export function GameRegistration() {
                 </>
               )}
             </Button>
+          ) : isFinished ? (
+            <div className="text-sm text-muted-foreground">
+              סיימת את המשחק להיום.
+            </div>
           ) : (
             <div className="space-y-2">
               {/* QR Scanner for Check-in - Available for any registered player who hasn't checked in */}
@@ -550,6 +591,20 @@ export function GameRegistration() {
                     {checkInStatus.message}
                   </Button>
                 )
+              )}
+              {isGameLive && userRegistration?.status === 'active' && (
+                <Button
+                  variant="secondary"
+                  onClick={handleFinish}
+                  disabled={finishing}
+                  className="w-full gap-2"
+                >
+                  {finishing ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    'סיימתי את המשחק'
+                  )}
+                </Button>
               )}
               {/* Cancel button - always available for registered players */}
               <Button
@@ -595,7 +650,16 @@ export function GameRegistration() {
           title="ביטלו הרשמה"
           players={cancelledRegistrations}
           showPosition={false}
-          emptyMessage="אין מבוטלים"
+          emptyMessage="אין שחקנים שביטלו הרשמה"
+        />
+      )}
+
+      {finishedRegistrations.length > 0 && (
+        <PlayerList
+          title="סיימו"
+          players={finishedRegistrations}
+          showPosition={false}
+          emptyMessage="אין שחקנים שסיימו את המשחק"
         />
       )}
     </div>
