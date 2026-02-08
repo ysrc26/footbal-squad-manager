@@ -70,7 +70,7 @@ export function PlayerList({ title, players, maxPlayers, showPosition, emptyMess
                   <div className="flex items-center gap-2">
                     {registration.is_waiting && (
                       <Badge className="bg-amber-500/20 text-amber-600 border-amber-500/50 text-xs">
-                        בהמתנה
+                        בהמתנה לפתיחת ההרשמה לכולם
                       </Badge>
                     )}
                     {registration.check_in_status === 'checked_in' && (

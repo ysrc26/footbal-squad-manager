@@ -425,7 +425,7 @@ export function GameRegistration() {
                   )}
                   {isUserWaiting && (
                     <Badge className="mt-1 bg-amber-500/20 text-amber-600 border-amber-500/50">
-                      בהמתנה
+                      בהמתנה לפתיחת ההרשמה לכולם
                     </Badge>
                   )}
                   {userRegistration.eta_minutes && userRegistration.eta_minutes > 0 && (
