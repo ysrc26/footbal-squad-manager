@@ -8,6 +8,7 @@ import type { Tables } from '@/lib/database.types';
 type Registration = Tables<'registrations'> & {
   full_name: string | null;
   avatar_url: string | null;
+  is_waiting?: boolean;
 };
 
 interface PlayerListProps {
@@ -64,8 +65,14 @@ export function PlayerList({ title, players, maxPlayers, showPosition, emptyMess
                   </span>
                 </div>
                 {(registration.check_in_status === 'checked_in' ||
-                  (registration.eta_minutes ?? 0) > 0) && (
+                  (registration.eta_minutes ?? 0) > 0 ||
+                  registration.is_waiting) && (
                   <div className="flex items-center gap-2">
+                    {registration.is_waiting && (
+                      <Badge className="bg-amber-500/20 text-amber-600 border-amber-500/50 text-xs">
+                        בהמתנה
+                      </Badge>
+                    )}
                     {registration.check_in_status === 'checked_in' && (
                       <Badge className="bg-green-500/20 text-green-500 border-green-500/50 text-xs">
                         <CheckCircle2 className="h-3 w-3 ml-1" />

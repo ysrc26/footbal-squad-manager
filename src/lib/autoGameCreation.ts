@@ -1,6 +1,6 @@
 /**
  * Automatic game creation logic
- * Creates weekly games on Sunday morning for the upcoming Shabbat
+ * Creates weekly games on Friday morning (06:00) for the upcoming Shabbat
  */
 
 import { supabase } from '@/integrations/supabase/client';
