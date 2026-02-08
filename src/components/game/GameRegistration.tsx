@@ -491,10 +491,18 @@ export function GameRegistration() {
         </CardHeader>
         <CardContent className="space-y-4">
           {/* Time Info */}
-          <div className="flex items-center gap-6 text-sm">
-            <div className="flex items-center gap-2">
-              <Clock className="h-4 w-4 text-muted-foreground" />
-              <span>התחלה: {formatTime(currentGame.kickoff_time)}</span>
+          <div className="flex flex-wrap items-center gap-6 text-sm">
+            <div className="flex flex-col gap-1">
+              <div className="flex items-center gap-2">
+                <Clock className="h-4 w-4 text-muted-foreground" />
+                <span>משחק ראשון: {formatTime(currentGame.kickoff_time)}</span>
+              </div>
+              {currentGame.deadline_time && (
+                <div className="flex items-center gap-2 text-muted-foreground">
+                  <Clock className="h-4 w-4 text-muted-foreground" />
+                  <span>שמירת מקומות עד: {formatTime(currentGame.deadline_time)}</span>
+                </div>
+              )}
             </div>
             <div className="flex items-center gap-2">
               <Users className="h-4 w-4 text-muted-foreground" />
