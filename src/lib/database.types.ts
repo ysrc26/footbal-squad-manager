@@ -11,6 +11,7 @@ export type AppRole = 'admin' | 'moderator' | 'user';
 export type GameStatus = 'scheduled' | 'open_for_residents' | 'open_for_all' | 'closed' | 'completed' | 'cancelled';
 
 export type RegistrationStatus = 'active' | 'standby' | 'cancelled' | 'no_show' | 'finished';
+export type PromotionReason = 'checkin' | 'cancellation' | 'finishing' | 'resequence';
 
 export type CheckInStatus = 'pending' | 'checked_in' | 'no_show';
 
@@ -153,6 +154,7 @@ export interface Database {
           status: RegistrationStatus
           check_in_status: CheckInStatus
           check_in_at: string | null
+          promotion_reason: PromotionReason | null
           eta_minutes: number | null
           queue_position: number | null
           created_at: string
@@ -165,6 +167,7 @@ export interface Database {
           status?: RegistrationStatus
           check_in_status?: CheckInStatus
           check_in_at?: string | null
+          promotion_reason?: PromotionReason | null
           eta_minutes?: number | null
           queue_position?: number | null
           created_at?: string
@@ -177,6 +180,7 @@ export interface Database {
           status?: RegistrationStatus
           check_in_status?: CheckInStatus
           check_in_at?: string | null
+          promotion_reason?: PromotionReason | null
           eta_minutes?: number | null
           queue_position?: number | null
           created_at?: string
@@ -255,6 +259,7 @@ export interface Database {
       game_status: GameStatus
       registration_status: RegistrationStatus
       check_in_status: CheckInStatus
+      promotion_reason: PromotionReason
     }
   }
 }
