@@ -9,6 +9,7 @@ type Registration = Tables<'registrations'> & {
   full_name: string | null;
   avatar_url: string | null;
   is_waiting?: boolean;
+  display_position?: number;
 };
 
 interface PlayerListProps {
@@ -58,9 +59,10 @@ export function PlayerList({ title, players, maxPlayers, showPosition, emptyMess
                 <div className="flex items-center gap-3">
                   {showPosition && (
                     <span className="w-6 h-6 rounded-full bg-primary/20 text-primary text-xs flex items-center justify-center font-medium">
-                      {registration.queue_position && registration.queue_position > 0
-                        ? registration.queue_position
-                        : index + 1}
+                      {registration.display_position ??
+                        (registration.queue_position && registration.queue_position > 0
+                          ? registration.queue_position
+                          : index + 1)}
                     </span>
                   )}
                   {registration.avatar_url ? (
@@ -87,16 +89,24 @@ export function PlayerList({ title, players, maxPlayers, showPosition, emptyMess
                       בהמתנה לפתיחת ההרשמה לכולם
                     </Badge>
                   )}
-                  {registration.check_in_status === 'no_show' && (
-                    <Badge className="bg-red-600 text-white border-red-600/70 text-xs">
-                      לא הגיע
+                  {registration.status === 'cancelled' ? (
+                    <Badge variant="secondary" className="text-xs">
+                      ביטל
                     </Badge>
-                  )}
-                  {registration.check_in_status === 'checked_in' && (
-                    <Badge className="bg-green-500/20 text-green-500 border-green-500/50 text-xs">
-                      <CheckCircle2 className="h-3 w-3 ml-1" />
-                      צ&apos;ק-אין
-                    </Badge>
+                  ) : (
+                    <>
+                      {registration.check_in_status === 'no_show' && (
+                        <Badge className="bg-red-600 text-white border-red-600/70 text-xs">
+                          לא הגיע
+                        </Badge>
+                      )}
+                      {registration.check_in_status === 'checked_in' && (
+                        <Badge className="bg-green-500/20 text-green-500 border-green-500/50 text-xs">
+                          <CheckCircle2 className="h-3 w-3 ml-1" />
+                          צ&apos;ק-אין
+                        </Badge>
+                      )}
+                    </>
                   )}
                   {(registration.eta_minutes ?? 0) > 0 && (
                     <Badge className="bg-red-500/20 text-red-500 border-red-500/50 text-xs">

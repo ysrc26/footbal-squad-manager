@@ -20,6 +20,7 @@ type Registration = Tables<'registrations'> & {
   avatar_url: string | null;
   is_resident?: boolean | null;
   is_waiting?: boolean;
+  display_position?: number;
 };
 
 // Fallback values for games without max_players/max_standby
@@ -67,7 +68,6 @@ export function GameRegistration() {
         .from('registrations')
         .select('*')
         .eq('game_id', currentGame.id)
-        .neq('status', 'cancelled')
         .order('queue_position', { ascending: true, nullsFirst: false })
         .order('created_at', { ascending: true });
 
@@ -106,8 +106,34 @@ export function GameRegistration() {
         is_resident: profilesMap.get(reg.user_id)?.is_resident ?? null,
       }));
 
-      setRegistrations(mergedRegistrations);
-      const myReg = user ? mergedRegistrations.find((r) => r.user_id === user.id) || null : null;
+      const activeOrStandby = mergedRegistrations.filter((r) => r.status === 'active' || r.status === 'standby');
+      const combinedSorted = activeOrStandby.slice().sort((a, b) => {
+        const aPos = a.queue_position ?? Number.MAX_SAFE_INTEGER;
+        const bPos = b.queue_position ?? Number.MAX_SAFE_INTEGER;
+        if (aPos !== bPos) return aPos - bPos;
+        return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+      });
+      const positionMap = new Map<string, number>();
+      combinedSorted.forEach((r, index) => {
+        positionMap.set(r.id, index + 1);
+      });
+      const withDisplayPosition = (registration: Registration): Registration => {
+        const fallbackPosition = positionMap.get(registration.id);
+        const validPosition =
+          typeof registration.queue_position === 'number' &&
+          registration.queue_position > 0 &&
+          registration.queue_position <= combinedSorted.length;
+        return {
+          ...registration,
+          display_position: validPosition ? registration.queue_position : fallbackPosition,
+        };
+      };
+
+      const registrationsWithPositions = mergedRegistrations.map(withDisplayPosition);
+      setRegistrations(registrationsWithPositions);
+      const myReg = user
+        ? registrationsWithPositions.find((r) => r.user_id === user.id && r.status !== 'cancelled') || null
+        : null;
       setUserRegistration(myReg);
     } catch (error: any) {
       console.error('Error fetching registrations:', error);
@@ -362,8 +388,8 @@ export function GameRegistration() {
     .filter((r) => r.status === 'active')
     .slice()
     .sort((a, b) => {
-      const aPos = a.queue_position ?? Number.MAX_SAFE_INTEGER;
-      const bPos = b.queue_position ?? Number.MAX_SAFE_INTEGER;
+      const aPos = a.display_position ?? a.queue_position ?? Number.MAX_SAFE_INTEGER;
+      const bPos = b.display_position ?? b.queue_position ?? Number.MAX_SAFE_INTEGER;
       if (aPos !== bPos) return aPos - bPos;
       return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
     })
@@ -373,12 +399,16 @@ export function GameRegistration() {
     .filter((r) => r.status === 'standby')
     .slice()
     .sort((a, b) => {
-      const aPos = a.queue_position ?? Number.MAX_SAFE_INTEGER;
-      const bPos = b.queue_position ?? Number.MAX_SAFE_INTEGER;
+      const aPos = a.display_position ?? a.queue_position ?? Number.MAX_SAFE_INTEGER;
+      const bPos = b.display_position ?? b.queue_position ?? Number.MAX_SAFE_INTEGER;
       if (aPos !== bPos) return aPos - bPos;
       return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
     })
     .map(withWaitingStatus);
+  const cancelledRegistrations = registrations
+    .filter((r) => r.status === 'cancelled')
+    .slice()
+    .sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime());
   const isRegistered = !!userRegistration;
   const isNoShow = userRegistration?.check_in_status === 'no_show';
   const isCheckedIn = userRegistration?.check_in_status === 'checked_in';
@@ -456,7 +486,8 @@ export function GameRegistration() {
                   </p>
                   <p className="text-xs text-muted-foreground">
                     מיקום בתור:{' '}
-                    {userRegistration.queue_position ??
+                    {userRegistration.display_position ??
+                      userRegistration.queue_position ??
                       registrations.findIndex((r) => r.id === userRegistration.id) + 1}
                   </p>
                   <Badge variant="outline" className="mt-2 text-xs">
@@ -556,6 +587,15 @@ export function GameRegistration() {
           players={standbyRegistrations}
           showPosition
           emptyMessage="אין מזמינים"
+        />
+      )}
+
+      {cancelledRegistrations.length > 0 && (
+        <PlayerList
+          title="ביטלו הרשמה"
+          players={cancelledRegistrations}
+          showPosition={false}
+          emptyMessage="אין מבוטלים"
         />
       )}
     </div>
