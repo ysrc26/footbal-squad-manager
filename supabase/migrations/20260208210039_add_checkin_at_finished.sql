@@ -1,5 +1,3 @@
-alter type registration_status add value if not exists 'finished';
-
 alter table if exists public.registrations
   add column if not exists check_in_at timestamptz;
 
