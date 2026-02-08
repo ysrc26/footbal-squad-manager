@@ -308,6 +308,18 @@ export function GameRegistration() {
     return value.slice(0, 5);
   };
 
+  const formatRegistrationTime = (value?: string | null) => {
+    if (!value) return '';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return '';
+    const pad2 = (num: number) => num.toString().padStart(2, '0');
+    const hours = pad2(date.getHours());
+    const minutes = pad2(date.getMinutes());
+    const seconds = pad2(date.getSeconds());
+    const centiseconds = pad2(Math.floor(date.getMilliseconds() / 10));
+    return `${hours}:${minutes}:${seconds}.${centiseconds}`;
+  };
+
   const wave2OpensAt = currentGame?.registration_opens_at
     ? new Date(currentGame.registration_opens_at)
     : null;
@@ -418,6 +430,9 @@ export function GameRegistration() {
                     {userRegistration.queue_position ??
                       registrations.findIndex((r) => r.id === userRegistration.id) + 1}
                   </p>
+                  <Badge variant="outline" className="mt-2 text-xs">
+                    נרשם בשעה {formatRegistrationTime(userRegistration.created_at)}
+                  </Badge>
                   {isCheckedIn && (
                     <Badge className="mt-1 bg-green-500/20 text-green-500 border-green-500/50">
                       ✓ עשית צ&apos;ק-אין
