@@ -16,6 +16,8 @@ type Game = Tables<'games'>;
 type Registration = Tables<'registrations'> & {
   full_name: string | null;
   avatar_url: string | null;
+  is_resident?: boolean | null;
+  is_waiting?: boolean;
 };
 
 // Fallback values for games without max_players/max_standby
@@ -28,11 +30,10 @@ export function GameRegistration() {
   const [userRegistration, setUserRegistration] = useState<Registration | null>(null);
   const [loading, setLoading] = useState(true);
   const [registering, setRegistering] = useState(false);
+  const [now, setNow] = useState(() => new Date());
 
   const maxPlayersRaw = currentGame?.max_players ?? DEFAULT_MAX_PLAYERS;
-  const maxStandbyRaw = currentGame?.max_standby ?? 0;
-  // Active capacity = total max minus standby (matches register_for_game logic)
-  const maxPlayers = Math.max(0, maxPlayersRaw - maxStandbyRaw);
+  const maxPlayers = Math.max(0, maxPlayersRaw);
 
   const fetchCurrentGame = async () => {
     try {
@@ -82,14 +83,17 @@ export function GameRegistration() {
       // Step 3: Fetch profiles for those users
       const { data: profilesData, error: profilesError } = await supabase
         .from('profiles')
-        .select('id, full_name, avatar_url')
+        .select('id, full_name, avatar_url, is_resident')
         .in('id', userIds);
 
       if (profilesError) throw profilesError;
 
       // Step 4: Create a map for quick lookup
       const profilesMap = new Map(
-        (profilesData || []).map(p => [p.id, { full_name: p.full_name, avatar_url: p.avatar_url }])
+        (profilesData || []).map(p => [
+          p.id,
+          { full_name: p.full_name, avatar_url: p.avatar_url, is_resident: p.is_resident },
+        ])
       );
 
       // Step 5: Merge data
@@ -97,6 +101,7 @@ export function GameRegistration() {
         ...reg,
         full_name: profilesMap.get(reg.user_id)?.full_name || null,
         avatar_url: profilesMap.get(reg.user_id)?.avatar_url || null,
+        is_resident: profilesMap.get(reg.user_id)?.is_resident ?? null,
       }));
 
       setRegistrations(mergedRegistrations);
@@ -109,6 +114,11 @@ export function GameRegistration() {
 
   useEffect(() => {
     fetchCurrentGame();
+  }, []);
+
+  useEffect(() => {
+    const timer = setInterval(() => setNow(new Date()), 60_000);
+    return () => clearInterval(timer);
   }, []);
 
   useEffect(() => {
@@ -139,9 +149,7 @@ export function GameRegistration() {
 
   const canRegister = () => {
     if (!currentGame) return false;
-    
-    const now = new Date();
-    
+
     // Wave 2: Open for all - check timestamp first
     if (currentGame.registration_opens_at) {
       const wave2Opens = new Date(currentGame.registration_opens_at);
@@ -149,11 +157,11 @@ export function GameRegistration() {
         return true;
       }
     }
-    
-    // Wave 1: Open for residents only
+
+    // Wave 1: Allow everyone to register, non-residents enter as waiting
     if (currentGame.wave1_registration_opens_at) {
       const wave1Opens = new Date(currentGame.wave1_registration_opens_at);
-      if (now >= wave1Opens && profile?.is_resident) {
+      if (now >= wave1Opens) {
         return true;
       }
     }
@@ -168,9 +176,7 @@ export function GameRegistration() {
 
   const getRegistrationStatusText = () => {
     if (!currentGame) return 'ההרשמה סגורה';
-    
-    const now = new Date();
-    
+
     // Wave 2: Open for all
     if (currentGame.registration_opens_at) {
       const wave2Opens = new Date(currentGame.registration_opens_at);
@@ -178,12 +184,12 @@ export function GameRegistration() {
         return 'הירשם למשחק';
       }
     }
-    
-    // Wave 1: Open for residents only
+
+    // Wave 1: Residents + waiting list for non-residents
     if (currentGame.wave1_registration_opens_at) {
       const wave1Opens = new Date(currentGame.wave1_registration_opens_at);
       if (now >= wave1Opens) {
-        return profile?.is_resident ? 'הירשם למשחק' : 'ההרשמה פתוחה לתושבים בלבד';
+        return profile?.is_resident ? 'הירשם למשחק' : 'הירשם (בהמתנה)';
       }
     }
     
@@ -205,6 +211,14 @@ export function GameRegistration() {
 
     if (currentGame.status === 'cancelled') {
       return { allowed: false, message: 'המשחק בוטל' };
+    }
+
+    if (currentGame.kickoff_time) {
+      const kickoff = new Date(currentGame.kickoff_time);
+      const opensAt = new Date(kickoff.getTime() - 30 * 60 * 1000);
+      if (now < opensAt) {
+        return { allowed: false, message: 'צ׳ק-אין נפתח חצי שעה לפני המשחק' };
+      }
     }
 
     return { allowed: true, message: 'סרוק QR לצ\'ק-אין' };
@@ -230,11 +244,9 @@ export function GameRegistration() {
       const result = Array.isArray(data) ? data[0] : data;
       const newStatus = result?.status ?? 'active';
 
-      toast.success(
-        newStatus === 'active'
-          ? 'נרשמת בהצלחה! 🎉'
-          : 'נוספת לרשימת ההמתנה 📝'
-      );
+      toast.success('נרשמת למשחק! לא לשכוח לבצע צ\'ק אין בהגעתך למגרש', {
+        description: newStatus === 'standby' ? 'אתה ברשימת ההמתנה' : undefined,
+      });
       fetchRegistrations();
     } catch (error: any) {
       toast.error('שגיאה בהרשמה', { description: error.message });
@@ -296,6 +308,31 @@ export function GameRegistration() {
     return value.slice(0, 5);
   };
 
+  const formatRegistrationTime = (value?: string | null) => {
+    if (!value) return '';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return '';
+    const pad2 = (num: number) => num.toString().padStart(2, '0');
+    const hours = pad2(date.getHours());
+    const minutes = pad2(date.getMinutes());
+    const seconds = pad2(date.getSeconds());
+    const centiseconds = pad2(Math.floor(date.getMilliseconds() / 10));
+    return `${hours}:${minutes}:${seconds}.${centiseconds}`;
+  };
+
+  const wave2OpensAt = currentGame?.registration_opens_at
+    ? new Date(currentGame.registration_opens_at)
+    : null;
+  const isBeforeWave2 = wave2OpensAt ? now < wave2OpensAt : false;
+
+  const withWaitingStatus = (registration: Registration): Registration => ({
+    ...registration,
+    is_waiting:
+      isBeforeWave2 &&
+      registration.status === 'active' &&
+      registration.is_resident === false,
+  });
+
   const activeRegistrations = registrations
     .filter((r) => r.status === 'active')
     .slice()
@@ -304,7 +341,9 @@ export function GameRegistration() {
       const bPos = b.queue_position ?? Number.MAX_SAFE_INTEGER;
       if (aPos !== bPos) return aPos - bPos;
       return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
-    });
+    })
+    .map(withWaitingStatus);
+
   const standbyRegistrations = registrations
     .filter((r) => r.status === 'standby')
     .slice()
@@ -313,9 +352,14 @@ export function GameRegistration() {
       const bPos = b.queue_position ?? Number.MAX_SAFE_INTEGER;
       if (aPos !== bPos) return aPos - bPos;
       return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
-    });
+    })
+    .map(withWaitingStatus);
   const isRegistered = !!userRegistration;
   const isCheckedIn = userRegistration?.check_in_status === 'checked_in';
+  const isUserWaiting =
+    isBeforeWave2 &&
+    userRegistration?.status === 'active' &&
+    userRegistration?.is_resident === false;
   const checkInStatus = canCheckIn();
 
   if (loading) {
@@ -386,9 +430,17 @@ export function GameRegistration() {
                     {userRegistration.queue_position ??
                       registrations.findIndex((r) => r.id === userRegistration.id) + 1}
                   </p>
+                  <Badge variant="outline" className="mt-2 text-xs">
+                    נרשם בשעה {formatRegistrationTime(userRegistration.created_at)}
+                  </Badge>
                   {isCheckedIn && (
                     <Badge className="mt-1 bg-green-500/20 text-green-500 border-green-500/50">
                       ✓ עשית צ&apos;ק-אין
+                    </Badge>
+                  )}
+                  {isUserWaiting && (
+                    <Badge className="mt-1 bg-amber-500/20 text-amber-600 border-amber-500/50">
+                      בהמתנה לפתיחת ההרשמה לכולם
                     </Badge>
                   )}
                   {userRegistration.eta_minutes && userRegistration.eta_minutes > 0 && (

@@ -8,6 +8,7 @@ import type { Tables } from '@/lib/database.types';
 type Registration = Tables<'registrations'> & {
   full_name: string | null;
   avatar_url: string | null;
+  is_waiting?: boolean;
 };
 
 interface PlayerListProps {
@@ -19,6 +20,18 @@ interface PlayerListProps {
 }
 
 export function PlayerList({ title, players, maxPlayers, showPosition, emptyMessage }: PlayerListProps) {
+  const formatRegistrationTime = (value?: string | null) => {
+    if (!value) return '';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return '';
+    const pad2 = (num: number) => num.toString().padStart(2, '0');
+    const hours = pad2(date.getHours());
+    const minutes = pad2(date.getMinutes());
+    const seconds = pad2(date.getSeconds());
+    const centiseconds = pad2(Math.floor(date.getMilliseconds() / 10));
+    return `${hours}:${minutes}:${seconds}.${centiseconds}`;
+  };
+
   return (
     <Card className="glass animate-fade-in">
       <CardHeader className="pb-3">
@@ -63,22 +76,27 @@ export function PlayerList({ title, players, maxPlayers, showPosition, emptyMess
                     {registration.full_name || 'שחקן אנונימי'}
                   </span>
                 </div>
-                {(registration.check_in_status === 'checked_in' ||
-                  (registration.eta_minutes ?? 0) > 0) && (
-                  <div className="flex items-center gap-2">
-                    {registration.check_in_status === 'checked_in' && (
-                      <Badge className="bg-green-500/20 text-green-500 border-green-500/50 text-xs">
-                        <CheckCircle2 className="h-3 w-3 ml-1" />
-                        צ&apos;ק-אין
-                      </Badge>
-                    )}
-                    {(registration.eta_minutes ?? 0) > 0 && (
-                      <Badge className="bg-red-500/20 text-red-500 border-red-500/50 text-xs">
-                        מאחר {registration.eta_minutes}ד&apos;
-                      </Badge>
-                    )}
-                  </div>
-                )}
+                <div className="flex items-center gap-2">
+                  <Badge variant="outline" className="text-xs">
+                    נרשם בשעה {formatRegistrationTime(registration.created_at)}
+                  </Badge>
+                  {registration.is_waiting && (
+                    <Badge className="bg-amber-500/20 text-amber-600 border-amber-500/50 text-xs">
+                      בהמתנה לפתיחת ההרשמה לכולם
+                    </Badge>
+                  )}
+                  {registration.check_in_status === 'checked_in' && (
+                    <Badge className="bg-green-500/20 text-green-500 border-green-500/50 text-xs">
+                      <CheckCircle2 className="h-3 w-3 ml-1" />
+                      צ&apos;ק-אין
+                    </Badge>
+                  )}
+                  {(registration.eta_minutes ?? 0) > 0 && (
+                    <Badge className="bg-red-500/20 text-red-500 border-red-500/50 text-xs">
+                      מאחר {registration.eta_minutes}ד&apos;
+                    </Badge>
+                  )}
+                </div>
               </div>
             ))}
           </div>
