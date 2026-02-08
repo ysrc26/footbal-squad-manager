@@ -85,6 +85,11 @@ export function PlayerList({ title, players, maxPlayers, showPosition, emptyMess
                       בהמתנה לפתיחת ההרשמה לכולם
                     </Badge>
                   )}
+                  {registration.check_in_status === 'no_show' && (
+                    <Badge className="bg-red-600 text-white border-red-600/70 text-xs">
+                      לא הגיע
+                    </Badge>
+                  )}
                   {registration.check_in_status === 'checked_in' && (
                     <Badge className="bg-green-500/20 text-green-500 border-green-500/50 text-xs">
                       <CheckCircle2 className="h-3 w-3 ml-1" />

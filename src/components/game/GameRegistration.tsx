@@ -380,6 +380,7 @@ export function GameRegistration() {
     })
     .map(withWaitingStatus);
   const isRegistered = !!userRegistration;
+  const isNoShow = userRegistration?.check_in_status === 'no_show';
   const isCheckedIn = userRegistration?.check_in_status === 'checked_in';
   const isUserWaiting =
     isBeforeWave2 &&
@@ -461,10 +462,16 @@ export function GameRegistration() {
                   <Badge variant="outline" className="mt-2 text-xs">
                     נרשם בשעה {formatRegistrationTime(userRegistration.created_at)}
                   </Badge>
-                  {isCheckedIn && (
-                    <Badge className="mt-1 bg-green-500/20 text-green-500 border-green-500/50">
-                      ✓ עשית צ&apos;ק-אין
+                  {isNoShow ? (
+                    <Badge className="mt-1 bg-red-600 text-white border-red-600/70">
+                      לא הגיע
                     </Badge>
+                  ) : (
+                    isCheckedIn && (
+                      <Badge className="mt-1 bg-green-500/20 text-green-500 border-green-500/50">
+                        ✓ עשית צ&apos;ק-אין
+                      </Badge>
+                    )
                   )}
                   {isUserWaiting && (
                     <Badge className="mt-1 bg-amber-500/20 text-amber-600 border-amber-500/50">
