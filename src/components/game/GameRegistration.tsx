@@ -503,7 +503,7 @@ export function GameRegistration() {
 
     const statusMap: Record<string, { label: string; variant: 'default' | 'secondary' | 'destructive' | 'outline' }> = {
       scheduled: { label: 'מתוכנן', variant: 'secondary' },
-      open_for_residents: { label: 'פתוח להרשמה לתושבים', variant: 'default' },
+      open_for_residents: { label: 'פתוח להרשמה לתושבים🏠', variant: 'default' },
       open_for_all: { label: 'פתוח להרשמה לכולם', variant: 'default' },
       closed: { label: 'סגור להרשמה', variant: 'destructive' },
     };
@@ -709,11 +709,7 @@ export function GameRegistration() {
                   <Badge variant="outline" className="mt-2 text-xs">
                     נרשמת בשעה {formatRegistrationTime(userRegistration.created_at)}
                   </Badge>
-                  {isFinished ? (
-                    <Badge className="mt-1 bg-blue-600 text-white border-blue-600/70">
-                      סיימת את המשחק
-                    </Badge>
-                  ) : isNoShow ? (
+                  {isNoShow ? (
                     <Badge className="mt-1 bg-red-600 text-white border-red-600/70">
                       לא הגעת למשחק
                     </Badge>
@@ -764,10 +760,6 @@ export function GameRegistration() {
                 </>
               )}
             </Button>
-          ) : isFinished ? (
-            <div className="text-sm text-muted-foreground">
-              סיימת את המשחק להיום.
-            </div>
           ) : (
             <div className="space-y-2">
               {/* QR Scanner for Check-in - Available for any registered player who hasn't checked in */}
