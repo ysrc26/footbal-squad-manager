@@ -655,7 +655,7 @@ export function GameRegistration() {
           <div className="flex items-center justify-between">
             <CardTitle className="flex items-center gap-2">
               <Calendar className="h-5 w-5 text-primary" />
-              המשחק הבא
+              {isGameLive ? 'המשחק הנוכחי' : 'המשחק הבא'}
             </CardTitle>
             <div className="flex items-center gap-2">
               {isGameLive && <LiveBadge />}
