@@ -810,7 +810,7 @@ export function GameRegistration() {
               )}
               {isGameLive && userRegistration?.status === 'active' && isCheckedIn && (
                 <Button
-                  variant="destructive"
+                  variant="outlineDestructive"
                   onClick={() => setFinishConfirmOpen(true)}
                   disabled={finishing}
                   className="w-full gap-2"
@@ -825,7 +825,7 @@ export function GameRegistration() {
               {/* Cancel button - only before check-in */}
               {!isCheckedIn && (
                 <Button
-                  variant="destructive"
+                  variant="outlineDestructive"
                   onClick={() => setCancelConfirmOpen(true)}
                   disabled={registering}
                   className="w-full gap-2"
@@ -890,10 +890,10 @@ export function GameRegistration() {
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter className="gap-2 sm:gap-2 flex-row-reverse">
+            <AlertDialogCancel disabled={finishing}>בטל</AlertDialogCancel>
             <AlertDialogAction onClick={handleFinish} disabled={finishing}>
               {finishing ? 'מסיים את המשחק...' : 'סיים משחק'}
             </AlertDialogAction>
-            <AlertDialogCancel disabled={finishing}>בטל</AlertDialogCancel>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
@@ -907,10 +907,10 @@ export function GameRegistration() {
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter className="gap-2 sm:gap-2 flex-row-reverse">
+            <AlertDialogCancel disabled={registering}>בטל</AlertDialogCancel>
             <AlertDialogAction onClick={handleCancelRegistration} disabled={registering}>
               {registering ? 'מבטל הרשמה...' : 'בטל הרשמה'}
             </AlertDialogAction>
-            <AlertDialogCancel disabled={registering}>בטל</AlertDialogCancel>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
