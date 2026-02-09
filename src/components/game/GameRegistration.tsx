@@ -798,7 +798,7 @@ export function GameRegistration() {
               )}
               {isGameLive && userRegistration?.status === 'active' && isCheckedIn && (
                 <Button
-                  variant="secondary"
+                  variant="destructive"
                   onClick={handleFinish}
                   disabled={finishing}
                   className="w-full gap-2"
@@ -810,22 +810,24 @@ export function GameRegistration() {
                   )}
                 </Button>
               )}
-              {/* Cancel button - always available for registered players */}
-              <Button
-                variant="outline"
-                onClick={handleCancelRegistration}
-                disabled={registering}
-                className="w-full gap-2"
-              >
-                {registering ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <>
-                    <UserMinus className="h-4 w-4" />
-                    בטל הרשמה
-                  </>
-                )}
-              </Button>
+              {/* Cancel button - only before check-in */}
+              {!isCheckedIn && (
+                <Button
+                  variant="destructive"
+                  onClick={handleCancelRegistration}
+                  disabled={registering}
+                  className="w-full gap-2"
+                >
+                  {registering ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <>
+                      <UserMinus className="h-4 w-4" />
+                      בטל הרשמה
+                    </>
+                  )}
+                </Button>
+              )}
             </div>
           )}
         </CardContent>
