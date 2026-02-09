@@ -699,45 +699,47 @@ export function GameRegistration() {
                         : 'אתה ברשימת ההמתנה'}
                   </p>
                   {!isFinished && (
-                    <p className="text-xs text-muted-foreground">
-                      מיקומך בתור:{' '}
-                      {userRegistration.display_position ??
-                        userRegistration.queue_position ??
-                        registrations.findIndex((r) => r.id === userRegistration.id) + 1}
-                    </p>
-                  )}
-                  <Badge variant="outline" className="mt-2 text-xs">
-                    נרשמת בשעה {formatRegistrationTime(userRegistration.created_at)}
-                  </Badge>
-                  {isNoShow ? (
-                    <Badge className="mt-1 bg-red-600 text-white border-red-600/70">
-                      לא הגעת למשחק
-                    </Badge>
-                  ) : (
-                    isCheckedIn && (
-                      <Badge className="mt-1 bg-green-500/20 text-green-500 border-green-500/50">
-                        ✓ עשית צ&apos;ק-אין
+                    <>
+                      <p className="text-xs text-muted-foreground">
+                        מיקומך בתור:{' '}
+                        {userRegistration.display_position ??
+                          userRegistration.queue_position ??
+                          registrations.findIndex((r) => r.id === userRegistration.id) + 1}
+                      </p>
+                      <Badge variant="outline" className="mt-2 text-xs">
+                        נרשמת בשעה {formatRegistrationTime(userRegistration.created_at)}
                       </Badge>
-                    )
-                  )}
-                  {isUserWaiting && (
-                    <Badge className="mt-1 bg-amber-500/20 text-amber-600 border-amber-500/50">
-                      בהמתנה לפתיחת ההרשמה לכולם
-                    </Badge>
-                  )}
-                  {showLateBadge && (
-                    <Badge className="mt-1 bg-red-500/20 text-red-500 border-red-500/50">
-                      {userRegistration.eta_minutes && userRegistration.eta_minutes > 0
-                        ? `מאחר ${userRegistration.eta_minutes}ד'`
-                        : 'מאחר'}
-                    </Badge>
-                  )}
-                  {showEarlyFinishBadge && (
-                    <Badge className="mt-1 bg-indigo-500/20 text-indigo-500 border-indigo-500/50">
-                      {userRegistration.early_finish_time
-                        ? `מסיים ב-${formatTime(userRegistration.early_finish_time)}`
-                        : 'מסיים מוקדם'}
-                    </Badge>
+                      {isNoShow ? (
+                        <Badge className="mt-1 bg-red-600 text-white border-red-600/70">
+                          לא הגעת למשחק
+                        </Badge>
+                      ) : (
+                        isCheckedIn && (
+                          <Badge className="mt-1 bg-green-500/20 text-green-500 border-green-500/50">
+                            ✓ עשית צ&apos;ק-אין
+                          </Badge>
+                        )
+                      )}
+                      {isUserWaiting && (
+                        <Badge className="mt-1 bg-amber-500/20 text-amber-600 border-amber-500/50">
+                          בהמתנה לפתיחת ההרשמה לכולם
+                        </Badge>
+                      )}
+                      {showLateBadge && (
+                        <Badge className="mt-1 bg-red-500/20 text-red-500 border-red-500/50">
+                          {userRegistration.eta_minutes && userRegistration.eta_minutes > 0
+                            ? `מאחר ${userRegistration.eta_minutes}ד'`
+                            : 'מאחר'}
+                        </Badge>
+                      )}
+                      {showEarlyFinishBadge && (
+                        <Badge className="mt-1 bg-indigo-500/20 text-indigo-500 border-indigo-500/50">
+                          {userRegistration.early_finish_time
+                            ? `מסיים ב-${formatTime(userRegistration.early_finish_time)}`
+                            : 'מסיים מוקדם'}
+                        </Badge>
+                      )}
+                    </>
                   )}
                 </div>
               </div>
@@ -760,7 +762,7 @@ export function GameRegistration() {
                 </>
               )}
             </Button>
-          ) : (
+          ) : isFinished ? null : (
             <div className="space-y-2">
               {/* QR Scanner for Check-in - Available for any registered player who hasn't checked in */}
               {!isCheckedIn && (
