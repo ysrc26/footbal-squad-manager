@@ -810,7 +810,7 @@ export function GameRegistration() {
               )}
               {isGameLive && userRegistration?.status === 'active' && isCheckedIn && (
                 <Button
-                  variant="outlineDestructive"
+                  variant="info"
                   onClick={() => setFinishConfirmOpen(true)}
                   disabled={finishing}
                   className="w-full gap-2"
