@@ -802,7 +802,7 @@ export function GameRegistration() {
                   מסיים מוקדם
                 </Button>
               )}
-              {isGameLive && userRegistration?.status === 'active' && (
+              {isGameLive && userRegistration?.status === 'active' && isCheckedIn && (
                 <Button
                   variant="secondary"
                   onClick={handleFinish}
