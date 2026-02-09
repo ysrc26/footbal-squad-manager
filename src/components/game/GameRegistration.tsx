@@ -6,6 +6,19 @@ import { useAuth } from '@/contexts/AuthContext';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { useGameRealtime, type GameRealtimeEvent } from '@/hooks/useGameRealtime';
 import { toast } from 'sonner';
 import { Loader2, Calendar, Clock, Users, UserPlus, UserMinus, CheckCircle2, QrCode } from 'lucide-react';
@@ -35,6 +48,14 @@ export function GameRegistration() {
   const [registering, setRegistering] = useState(false);
   const [finishing, setFinishing] = useState(false);
   const [now, setNow] = useState(() => new Date());
+  const [lateModalOpen, setLateModalOpen] = useState(false);
+  const [lateMinutesInput, setLateMinutesInput] = useState('');
+  const [lateSaving, setLateSaving] = useState(false);
+  const [earlyModalOpen, setEarlyModalOpen] = useState(false);
+  const [earlyTimeInput, setEarlyTimeInput] = useState('');
+  const [earlySaving, setEarlySaving] = useState(false);
+  const [finishConfirmOpen, setFinishConfirmOpen] = useState(false);
+  const [cancelConfirmOpen, setCancelConfirmOpen] = useState(false);
 
   const maxPlayersRaw = currentGame?.max_players ?? DEFAULT_MAX_PLAYERS;
   const maxPlayers = Math.max(0, maxPlayersRaw);
@@ -351,13 +372,151 @@ export function GameRegistration() {
     }
   };
 
+  const openLateModal = () => {
+    if (!userRegistration) return;
+    setLateMinutesInput(
+      userRegistration.eta_minutes && userRegistration.eta_minutes > 0
+        ? String(userRegistration.eta_minutes)
+        : ''
+    );
+    setLateModalOpen(true);
+  };
+
+  const openEarlyModal = () => {
+    if (!userRegistration) return;
+    const existing = formatTimeInputValue(userRegistration.early_finish_time);
+    setEarlyTimeInput(existing || getDefaultEarlyTime());
+    setEarlyModalOpen(true);
+  };
+
+  const saveLateNotice = async () => {
+    if (!currentGame || !userRegistration) return;
+    if (userRegistration.check_in_status === 'checked_in') {
+      toast.error('לא ניתן לעדכן איחור אחרי צ׳ק-אין');
+      return;
+    }
+
+    const trimmed = lateMinutesInput.trim();
+    const minutesValue = trimmed.length > 0 ? Number(trimmed) : null;
+
+    if (trimmed.length > 0) {
+      if (!Number.isFinite(minutesValue) || minutesValue <= 0) {
+        toast.error('יש להזין מספר דקות חיובי');
+        return;
+      }
+      if (!Number.isInteger(minutesValue)) {
+        toast.error('יש להזין מספר דקות שלם');
+        return;
+      }
+    }
+
+    setLateSaving(true);
+    try {
+      const { error } = await supabase.rpc('update_registration_notice', {
+        _game_id: currentGame.id,
+        _is_late: true,
+        _eta_minutes: minutesValue,
+        _is_early_finish: userRegistration.is_early_finish ?? false,
+        _early_finish_time: userRegistration.early_finish_time ?? null,
+      });
+
+      if (error) throw error;
+
+      toast.success('עודכן איחור');
+      setLateModalOpen(false);
+      fetchRegistrations();
+    } catch (error: any) {
+      toast.error('שגיאה בעדכון איחור', { description: error.message });
+    } finally {
+      setLateSaving(false);
+    }
+  };
+
+  const clearLateNotice = async () => {
+    if (!currentGame || !userRegistration) return;
+    setLateSaving(true);
+    try {
+      const { error } = await supabase.rpc('update_registration_notice', {
+        _game_id: currentGame.id,
+        _is_late: false,
+        _eta_minutes: null,
+        _is_early_finish: userRegistration.is_early_finish ?? false,
+        _early_finish_time: userRegistration.early_finish_time ?? null,
+      });
+
+      if (error) throw error;
+
+      toast.success('איחור בוטל');
+      setLateModalOpen(false);
+      setLateMinutesInput('');
+      fetchRegistrations();
+    } catch (error: any) {
+      toast.error('שגיאה בביטול איחור', { description: error.message });
+    } finally {
+      setLateSaving(false);
+    }
+  };
+
+  const saveEarlyFinishNotice = async () => {
+    if (!currentGame || !userRegistration) return;
+
+    const trimmed = earlyTimeInput.trim();
+    const timeValue = trimmed.length > 0 ? trimmed : null;
+
+    setEarlySaving(true);
+    try {
+      const { error } = await supabase.rpc('update_registration_notice', {
+        _game_id: currentGame.id,
+        _is_late: userRegistration.is_late ?? false,
+        _eta_minutes: userRegistration.eta_minutes ?? null,
+        _is_early_finish: true,
+        _early_finish_time: timeValue,
+      });
+
+      if (error) throw error;
+
+      toast.success('עודכן סיום מוקדם');
+      setEarlyModalOpen(false);
+      fetchRegistrations();
+    } catch (error: any) {
+      toast.error('שגיאה בעדכון סיום מוקדם', { description: error.message });
+    } finally {
+      setEarlySaving(false);
+    }
+  };
+
+  const clearEarlyFinishNotice = async () => {
+    if (!currentGame || !userRegistration) return;
+
+    setEarlySaving(true);
+    try {
+      const { error } = await supabase.rpc('update_registration_notice', {
+        _game_id: currentGame.id,
+        _is_late: userRegistration.is_late ?? false,
+        _eta_minutes: userRegistration.eta_minutes ?? null,
+        _is_early_finish: false,
+        _early_finish_time: null,
+      });
+
+      if (error) throw error;
+
+      toast.success('סיום מוקדם בוטל');
+      setEarlyModalOpen(false);
+      fetchRegistrations();
+    } catch (error: any) {
+      toast.error('שגיאה בביטול סיום מוקדם', { description: error.message });
+    } finally {
+      setEarlySaving(false);
+    }
+  };
+
   const getStatusBadge = () => {
     if (!currentGame) return null;
 
     const statusMap: Record<string, { label: string; variant: 'default' | 'secondary' | 'destructive' | 'outline' }> = {
       scheduled: { label: 'מתוכנן', variant: 'secondary' },
-      open_for_residents: { label: 'פתוח לתושבים', variant: 'default' },
-      open_for_all: { label: 'פתוח לכולם', variant: 'default' },
+      open_for_residents: { label: 'פתוח להרשמה לתושבים🏠', variant: 'default' },
+      open_for_all: { label: 'פתוח להרשמה לכולם', variant: 'default' },
       closed: { label: 'סגור להרשמה', variant: 'destructive' },
     };
 
@@ -383,6 +542,28 @@ export function GameRegistration() {
     }
     return value.slice(0, 5);
   };
+
+  const formatTimeInputFromDate = (date: Date) => {
+    const pad2 = (num: number) => num.toString().padStart(2, '0');
+    return `${pad2(date.getHours())}:${pad2(date.getMinutes())}`;
+  };
+
+  const formatTimeInputValue = (value?: string | null) => {
+    if (!value) return '';
+    if (value.includes('T')) {
+      const d = new Date(value);
+      if (Number.isNaN(d.getTime())) return '';
+      return formatTimeInputFromDate(d);
+    }
+    return value.slice(0, 5);
+  };
+
+  const roundToNextFiveMinutes = (date: Date) => {
+    const ms = 5 * 60 * 1000;
+    return new Date(Math.ceil(date.getTime() / ms) * ms);
+  };
+
+  const getDefaultEarlyTime = () => formatTimeInputFromDate(roundToNextFiveMinutes(new Date()));
 
   const formatRegistrationTime = (value?: string | null) => {
     if (!value) return '';
@@ -443,6 +624,12 @@ export function GameRegistration() {
     isBeforeWave2 &&
     userRegistration?.status === 'active' &&
     userRegistration?.is_resident === false;
+  const isLate = userRegistration?.is_late === true;
+  const isEarlyFinish = userRegistration?.is_early_finish === true;
+  const isActiveOrStandby =
+    userRegistration?.status === 'active' || userRegistration?.status === 'standby';
+  const showLateBadge = isActiveOrStandby && isLate && !isCheckedIn;
+  const showEarlyFinishBadge = isActiveOrStandby && isEarlyFinish;
   const checkInStatus = canCheckIn();
 
   if (loading) {
@@ -480,34 +667,34 @@ export function GameRegistration() {
           <div className="flex items-center justify-between">
             <CardTitle className="flex items-center gap-2">
               <Calendar className="h-5 w-5 text-primary" />
-              המשחק הבא
+              {isGameLive ? 'מתקיים כעת' : 'המשחק הבא'}
             </CardTitle>
             <div className="flex items-center gap-2">
               {isGameLive && <LiveBadge />}
-              {getStatusBadge()}
+              {!isGameLive && getStatusBadge()}
             </div>
           </div>
           <CardDescription>{formatDate(currentGame.date)}</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           {/* Time Info */}
-          <div className="flex flex-wrap items-center gap-6 text-sm">
-            <div className="flex flex-col gap-1">
+          <div className="flex flex-col gap-2 text-sm">
+            <div className="flex items-center justify-between gap-4">
               <div className="flex items-center gap-2">
                 <Clock className="h-4 w-4 text-muted-foreground" />
                 <span>משחק ראשון: {formatTime(currentGame.kickoff_time)}</span>
               </div>
-              {currentGame.deadline_time && (
-                <div className="flex items-center gap-2 text-muted-foreground">
-                  <Clock className="h-4 w-4 text-muted-foreground" />
-                  <span>שמירת מקומות עד: {formatTime(currentGame.deadline_time)}</span>
-                </div>
-              )}
+              <div className="flex items-center gap-2">
+                <Users className="h-4 w-4 text-muted-foreground" />
+                <span>{maxPlayers}</span>
+              </div>
             </div>
-            <div className="flex items-center gap-2">
-              <Users className="h-4 w-4 text-muted-foreground" />
-              <span>{activeRegistrations.length}/{maxPlayers}</span>
-            </div>
+            {currentGame.deadline_time && (
+              <div className="flex items-center gap-2 text-muted-foreground">
+                <Clock className="h-4 w-4 text-muted-foreground" />
+                <span>שמירת מקומות עד: {formatTime(currentGame.deadline_time)}</span>
+              </div>
+            )}
           </div>
 
           {/* Registration Status */}
@@ -524,40 +711,47 @@ export function GameRegistration() {
                         : 'אתה ברשימת ההמתנה'}
                   </p>
                   {!isFinished && (
-                    <p className="text-xs text-muted-foreground">
-                      מיקומך בתור:{' '}
-                      {userRegistration.display_position ??
-                        userRegistration.queue_position ??
-                        registrations.findIndex((r) => r.id === userRegistration.id) + 1}
-                    </p>
-                  )}
-                  <Badge variant="outline" className="mt-2 text-xs">
-                    נרשמת בשעה {formatRegistrationTime(userRegistration.created_at)}
-                  </Badge>
-                  {isFinished ? (
-                    <Badge className="mt-1 bg-blue-600 text-white border-blue-600/70">
-                      סיימת את המשחק
-                    </Badge>
-                  ) : isNoShow ? (
-                    <Badge className="mt-1 bg-red-600 text-white border-red-600/70">
-                      לא הגעת למשחק
-                    </Badge>
-                  ) : (
-                    isCheckedIn && (
-                      <Badge className="mt-1 bg-green-500/20 text-green-500 border-green-500/50">
-                        ✓ עשית צ&apos;ק-אין
+                    <>
+                      <p className="text-xs text-muted-foreground">
+                        מיקומך בתור:{' '}
+                        {userRegistration.display_position ??
+                          userRegistration.queue_position ??
+                          registrations.findIndex((r) => r.id === userRegistration.id) + 1}
+                      </p>
+                      <Badge variant="outline" className="mt-2 text-xs">
+                        נרשמת בשעה {formatRegistrationTime(userRegistration.created_at)}
                       </Badge>
-                    )
-                  )}
-                  {isUserWaiting && (
-                    <Badge className="mt-1 bg-amber-500/20 text-amber-600 border-amber-500/50">
-                      בהמתנה לפתיחת ההרשמה לכולם
-                    </Badge>
-                  )}
-                  {userRegistration.eta_minutes && userRegistration.eta_minutes > 0 && (
-                    <Badge className="mt-1 bg-red-500/20 text-red-500 border-red-500/50">
-                      מאחר {userRegistration.eta_minutes}ד&apos;
-                    </Badge>
+                      {isNoShow ? (
+                        <Badge className="mt-1 bg-red-600 text-white border-red-600/70">
+                          לא הגעת למשחק
+                        </Badge>
+                      ) : (
+                        isCheckedIn && (
+                          <Badge className="mt-1 bg-green-500/20 text-green-500 border-green-500/50">
+                            ✓ עשית צ&apos;ק-אין
+                          </Badge>
+                        )
+                      )}
+                      {isUserWaiting && (
+                        <Badge className="mt-1 bg-amber-500/20 text-amber-600 border-amber-500/50">
+                          בהמתנה לפתיחת ההרשמה לכולם
+                        </Badge>
+                      )}
+                      {showLateBadge && (
+                        <Badge className="mt-1 bg-red-500/20 text-red-500 border-red-500/50">
+                          {userRegistration.eta_minutes && userRegistration.eta_minutes > 0
+                            ? `מאחר ${userRegistration.eta_minutes}ד'`
+                            : 'מאחר'}
+                        </Badge>
+                      )}
+                      {showEarlyFinishBadge && (
+                        <Badge className="mt-1 bg-indigo-500/20 text-indigo-500 border-indigo-500/50">
+                          {userRegistration.early_finish_time
+                            ? `מסיים ב-${formatTime(userRegistration.early_finish_time)}`
+                            : 'מסיים מוקדם'}
+                        </Badge>
+                      )}
+                    </>
                   )}
                 </div>
               </div>
@@ -580,11 +774,7 @@ export function GameRegistration() {
                 </>
               )}
             </Button>
-          ) : isFinished ? (
-            <div className="text-sm text-muted-foreground">
-              סיימת את המשחק להיום.
-            </div>
-          ) : (
+          ) : isFinished ? null : (
             <div className="space-y-2">
               {/* QR Scanner for Check-in - Available for any registered player who hasn't checked in */}
               {!isCheckedIn && (
@@ -600,10 +790,28 @@ export function GameRegistration() {
                   </Button>
                 )
               )}
-              {isGameLive && userRegistration?.status === 'active' && (
+              {isActiveOrStandby && !isCheckedIn && (
                 <Button
-                  variant="secondary"
-                  onClick={handleFinish}
+                  variant="outline"
+                  onClick={openLateModal}
+                  className="w-full gap-2"
+                >
+                  עדכן איחור
+                </Button>
+              )}
+              {isActiveOrStandby && (
+                <Button
+                  variant="outline"
+                  onClick={openEarlyModal}
+                  className="w-full gap-2"
+                >
+                  מסיים מוקדם
+                </Button>
+              )}
+              {isGameLive && userRegistration?.status === 'active' && isCheckedIn && (
+                <Button
+                  variant="info"
+                  onClick={() => setFinishConfirmOpen(true)}
                   disabled={finishing}
                   className="w-full gap-2"
                 >
@@ -614,22 +822,24 @@ export function GameRegistration() {
                   )}
                 </Button>
               )}
-              {/* Cancel button - always available for registered players */}
-              <Button
-                variant="outline"
-                onClick={handleCancelRegistration}
-                disabled={registering}
-                className="w-full gap-2"
-              >
-                {registering ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <>
-                    <UserMinus className="h-4 w-4" />
-                    בטל הרשמה
-                  </>
-                )}
-              </Button>
+              {/* Cancel button - only before check-in */}
+              {!isCheckedIn && (
+                <Button
+                  variant="outlineDestructive"
+                  onClick={() => setCancelConfirmOpen(true)}
+                  disabled={registering}
+                  className="w-full gap-2"
+                >
+                  {registering ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <>
+                      <UserMinus className="h-4 w-4" />
+                      בטל הרשמה
+                    </>
+                  )}
+                </Button>
+              )}
             </div>
           )}
         </CardContent>
@@ -670,6 +880,135 @@ export function GameRegistration() {
           emptyMessage="אין שחקנים שסיימו את המשחק"
         />
       )}
+
+      <AlertDialog open={finishConfirmOpen} onOpenChange={setFinishConfirmOpen}>
+        <AlertDialogContent className="text-right" dir="rtl">
+          <AlertDialogHeader className="text-right">
+            <AlertDialogTitle className="text-right">האם אתה בטוח?</AlertDialogTitle>
+            <AlertDialogDescription className="text-right">
+              הפעולה לא ניתנת לביטול.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="gap-2 sm:gap-2 flex-row-reverse">
+            <AlertDialogCancel disabled={finishing}>בטל</AlertDialogCancel>
+            <AlertDialogAction onClick={handleFinish} disabled={finishing}>
+              {finishing ? 'מסיים את המשחק...' : 'סיים משחק'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={cancelConfirmOpen} onOpenChange={setCancelConfirmOpen}>
+        <AlertDialogContent className="text-right" dir="rtl">
+          <AlertDialogHeader className="text-right">
+            <AlertDialogTitle className="text-right">האם אתה בטוח?</AlertDialogTitle>
+            <AlertDialogDescription className="text-right">
+              הפעולה לא ניתנת לביטול.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="gap-2 sm:gap-2 flex-row-reverse">
+            <AlertDialogCancel disabled={registering}>בטל</AlertDialogCancel>
+            <AlertDialogAction onClick={handleCancelRegistration} disabled={registering}>
+              {registering ? 'מבטל הרשמה...' : 'בטל הרשמה'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <Dialog open={lateModalOpen} onOpenChange={setLateModalOpen}>
+        <DialogContent className="sm:max-w-md text-right" dir="rtl">
+          <DialogHeader className="text-right">
+            <DialogTitle className="text-right">עדכן איחור</DialogTitle>
+            <DialogDescription className="text-right">
+              אפשר לבחור דקות איחור או להשאיר ללא דקות.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label>צ׳יפים מהירים</Label>
+              <div className="flex flex-wrap gap-2">
+                {[5, 10, 15, 20, 30].map((value) => (
+                  <Button
+                    key={value}
+                    size="sm"
+                    variant={lateMinutesInput === String(value) ? 'default' : 'outline'}
+                    onClick={() => setLateMinutesInput(String(value))}
+                  >
+                    {value} דק׳
+                  </Button>
+                ))}
+                <Button
+                  size="sm"
+                  variant={lateMinutesInput === '' ? 'default' : 'outline'}
+                  onClick={() => setLateMinutesInput('')}
+                >
+                  ללא דקות
+                </Button>
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="late-minutes-input">דקות איחור</Label>
+              <Input
+                id="late-minutes-input"
+                type="number"
+                inputMode="numeric"
+                step={1}
+                min={1}
+                placeholder="למשל 12"
+                value={lateMinutesInput}
+                onChange={(event) => setLateMinutesInput(event.target.value)}
+              />
+            </div>
+          </div>
+          <DialogFooter className="gap-2 sm:gap-2 flex-row-reverse">
+            <Button onClick={saveLateNotice} disabled={lateSaving}>
+              {lateSaving ? 'שומר...' : 'שמירה'}
+            </Button>
+            <Button variant="ghost" onClick={clearLateNotice} disabled={lateSaving}>
+              בטל איחור
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={earlyModalOpen} onOpenChange={setEarlyModalOpen}>
+        <DialogContent className="sm:max-w-md text-right" dir="rtl">
+          <DialogHeader className="text-right">
+            <DialogTitle className="text-right">מסיים מוקדם</DialogTitle>
+            <DialogDescription className="text-right">
+              בחר שעה לסיום מוקדם או השאר ללא שעה.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="early-time-input">שעת סיום</Label>
+              <Input
+                id="early-time-input"
+                type="time"
+                step={300}
+                value={earlyTimeInput}
+                onChange={(event) => setEarlyTimeInput(event.target.value)}
+              />
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              className="w-fit"
+              onClick={() => setEarlyTimeInput('')}
+            >
+              ללא שעה
+            </Button>
+          </div>
+          <DialogFooter className="gap-2 sm:gap-2 flex-row-reverse">
+            <Button onClick={saveEarlyFinishNotice} disabled={earlySaving}>
+              {earlySaving ? 'שומר...' : 'שמירה'}
+            </Button>
+            <Button variant="ghost" onClick={clearEarlyFinishNotice} disabled={earlySaving}>
+              בטל סיום מוקדם
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

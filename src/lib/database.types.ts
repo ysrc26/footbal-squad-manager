@@ -156,6 +156,9 @@ export interface Database {
           check_in_at: string | null
           promotion_reason: PromotionReason | null
           eta_minutes: number | null
+          is_late: boolean
+          is_early_finish: boolean
+          early_finish_time: string | null
           queue_position: number | null
           created_at: string
           updated_at: string
@@ -169,6 +172,9 @@ export interface Database {
           check_in_at?: string | null
           promotion_reason?: PromotionReason | null
           eta_minutes?: number | null
+          is_late?: boolean
+          is_early_finish?: boolean
+          early_finish_time?: string | null
           queue_position?: number | null
           created_at?: string
           updated_at?: string
@@ -182,6 +188,9 @@ export interface Database {
           check_in_at?: string | null
           promotion_reason?: PromotionReason | null
           eta_minutes?: number | null
+          is_late?: boolean
+          is_early_finish?: boolean
+          early_finish_time?: string | null
           queue_position?: number | null
           created_at?: string
           updated_at?: string
@@ -219,6 +228,16 @@ export interface Database {
       finish_registration_for_game: {
         Args: {
           _game_id: string
+        }
+        Returns: null
+      }
+      update_registration_notice: {
+        Args: {
+          _game_id: string
+          _is_late: boolean
+          _eta_minutes: number | null
+          _is_early_finish: boolean
+          _early_finish_time: string | null
         }
         Returns: null
       }
