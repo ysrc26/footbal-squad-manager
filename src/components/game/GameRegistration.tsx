@@ -503,8 +503,8 @@ export function GameRegistration() {
 
     const statusMap: Record<string, { label: string; variant: 'default' | 'secondary' | 'destructive' | 'outline' }> = {
       scheduled: { label: 'מתוכנן', variant: 'secondary' },
-      open_for_residents: { label: 'פתוח לתושבים', variant: 'default' },
-      open_for_all: { label: 'פתוח לכולם', variant: 'default' },
+      open_for_residents: { label: 'פתוח להרשמה לתושבים', variant: 'default' },
+      open_for_all: { label: 'פתוח להרשמה לכולם', variant: 'default' },
       closed: { label: 'סגור להרשמה', variant: 'destructive' },
     };
 
@@ -655,11 +655,11 @@ export function GameRegistration() {
           <div className="flex items-center justify-between">
             <CardTitle className="flex items-center gap-2">
               <Calendar className="h-5 w-5 text-primary" />
-              {isGameLive ? 'המשחק הנוכחי' : 'המשחק הבא'}
+              {isGameLive ? 'מתקיים כעת' : 'המשחק הבא'}
             </CardTitle>
             <div className="flex items-center gap-2">
               {isGameLive && <LiveBadge />}
-              {getStatusBadge()}
+              {!isGameLive && getStatusBadge()}
             </div>
           </div>
           <CardDescription>{formatDate(currentGame.date)}</CardDescription>
