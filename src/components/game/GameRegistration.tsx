@@ -6,6 +6,16 @@ import { useAuth } from '@/contexts/AuthContext';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -44,6 +54,8 @@ export function GameRegistration() {
   const [earlyModalOpen, setEarlyModalOpen] = useState(false);
   const [earlyTimeInput, setEarlyTimeInput] = useState('');
   const [earlySaving, setEarlySaving] = useState(false);
+  const [finishConfirmOpen, setFinishConfirmOpen] = useState(false);
+  const [cancelConfirmOpen, setCancelConfirmOpen] = useState(false);
 
   const maxPlayersRaw = currentGame?.max_players ?? DEFAULT_MAX_PLAYERS;
   const maxPlayers = Math.max(0, maxPlayersRaw);
@@ -799,7 +811,7 @@ export function GameRegistration() {
               {isGameLive && userRegistration?.status === 'active' && isCheckedIn && (
                 <Button
                   variant="destructive"
-                  onClick={handleFinish}
+                  onClick={() => setFinishConfirmOpen(true)}
                   disabled={finishing}
                   className="w-full gap-2"
                 >
@@ -814,7 +826,7 @@ export function GameRegistration() {
               {!isCheckedIn && (
                 <Button
                   variant="destructive"
-                  onClick={handleCancelRegistration}
+                  onClick={() => setCancelConfirmOpen(true)}
                   disabled={registering}
                   className="w-full gap-2"
                 >
@@ -868,6 +880,40 @@ export function GameRegistration() {
           emptyMessage="אין שחקנים שסיימו את המשחק"
         />
       )}
+
+      <AlertDialog open={finishConfirmOpen} onOpenChange={setFinishConfirmOpen}>
+        <AlertDialogContent className="text-right" dir="rtl">
+          <AlertDialogHeader className="text-right">
+            <AlertDialogTitle className="text-right">האם אתה בטוח?</AlertDialogTitle>
+            <AlertDialogDescription className="text-right">
+              הפעולה לא ניתנת לביטול.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="gap-2 sm:gap-2 flex-row-reverse">
+            <AlertDialogAction onClick={handleFinish} disabled={finishing}>
+              {finishing ? 'מסיים את המשחק...' : 'סיים משחק'}
+            </AlertDialogAction>
+            <AlertDialogCancel disabled={finishing}>בטל</AlertDialogCancel>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={cancelConfirmOpen} onOpenChange={setCancelConfirmOpen}>
+        <AlertDialogContent className="text-right" dir="rtl">
+          <AlertDialogHeader className="text-right">
+            <AlertDialogTitle className="text-right">האם אתה בטוח?</AlertDialogTitle>
+            <AlertDialogDescription className="text-right">
+              הפעולה לא ניתנת לביטול.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="gap-2 sm:gap-2 flex-row-reverse">
+            <AlertDialogAction onClick={handleCancelRegistration} disabled={registering}>
+              {registering ? 'מבטל הרשמה...' : 'בטל הרשמה'}
+            </AlertDialogAction>
+            <AlertDialogCancel disabled={registering}>בטל</AlertDialogCancel>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <Dialog open={lateModalOpen} onOpenChange={setLateModalOpen}>
         <DialogContent className="sm:max-w-md text-right" dir="rtl">
