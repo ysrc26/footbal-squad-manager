@@ -6,8 +6,8 @@ alter table if exists public.registrations
 create or replace function public.update_registration_notice(
   _game_id uuid,
   _is_late boolean,
-  _eta_minutes integer default null,
   _is_early_finish boolean,
+  _eta_minutes integer default null,
   _early_finish_time time default null
 )
 returns void
