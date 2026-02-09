@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Users, CheckCircle2, User } from 'lucide-react';
@@ -21,6 +22,8 @@ interface PlayerListProps {
 }
 
 export function PlayerList({ title, players, maxPlayers, showPosition, emptyMessage }: PlayerListProps) {
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(() => new Set());
+
   const formatRegistrationTime = (value?: string | null) => {
     if (!value) return '';
     const date = new Date(value);
@@ -31,6 +34,28 @@ export function PlayerList({ title, players, maxPlayers, showPosition, emptyMess
     const seconds = pad2(date.getSeconds());
     const centiseconds = pad2(Math.floor(date.getMilliseconds() / 10));
     return `${hours}:${minutes}:${seconds}.${centiseconds}`;
+  };
+
+  const formatTimeValue = (value?: string | null) => {
+    if (!value) return '';
+    if (value.includes('T')) {
+      const date = new Date(value);
+      if (Number.isNaN(date.getTime())) return '';
+      return date.toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' });
+    }
+    return value.slice(0, 5);
+  };
+
+  const toggleExpanded = (id: string) => {
+    setExpandedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
   };
 
   return (
@@ -51,75 +76,108 @@ export function PlayerList({ title, players, maxPlayers, showPosition, emptyMess
           <p className="text-sm text-muted-foreground text-center py-4">{emptyMessage}</p>
         ) : (
           <div className="space-y-2">
-            {players.map((registration, index) => (
-              <div
-                key={registration.id}
-                className="flex items-center justify-between p-2 rounded-lg bg-secondary/30"
-              >
-                <div className="flex items-center gap-3">
-                  {showPosition && (
-                    <span className="w-6 h-6 rounded-full bg-primary/20 text-primary text-xs flex items-center justify-center font-medium">
-                      {registration.display_position ??
-                        (registration.queue_position && registration.queue_position > 0
-                          ? registration.queue_position
-                          : index + 1)}
-                    </span>
-                  )}
-                  {registration.avatar_url ? (
-                    <img
-                      src={registration.avatar_url}
-                      alt=""
-                      className="w-6 h-6 rounded-full object-cover"
-                    />
-                  ) : (
-                    <div className="w-6 h-6 rounded-full bg-muted flex items-center justify-center">
-                      <User className="w-3 h-3 text-muted-foreground" />
+            {players.map((registration, index) => {
+              const isExpanded = expandedIds.has(registration.id);
+              const isActiveOrStandby = registration.status === 'active' || registration.status === 'standby';
+              const showLateBadge =
+                isActiveOrStandby &&
+                registration.is_late === true &&
+                registration.check_in_status !== 'checked_in';
+              const showEarlyFinishBadge =
+                isActiveOrStandby && registration.is_early_finish === true;
+
+              return (
+                <div key={registration.id} className="space-y-1">
+                  <div
+                    className="flex items-center justify-between p-2 rounded-lg bg-secondary/30 cursor-pointer sm:cursor-default"
+                    onClick={() => toggleExpanded(registration.id)}
+                  >
+                    <div className="flex items-center gap-3">
+                      {showPosition && (
+                        <span className="w-6 h-6 rounded-full bg-primary/20 text-primary text-xs flex items-center justify-center font-medium">
+                          {registration.display_position ??
+                            (registration.queue_position && registration.queue_position > 0
+                              ? registration.queue_position
+                              : index + 1)}
+                        </span>
+                      )}
+                      {registration.avatar_url ? (
+                        <img
+                          src={registration.avatar_url}
+                          alt=""
+                          className="w-6 h-6 rounded-full object-cover"
+                        />
+                      ) : (
+                        <div className="w-6 h-6 rounded-full bg-muted flex items-center justify-center">
+                          <User className="w-3 h-3 text-muted-foreground" />
+                        </div>
+                      )}
+                      <span className="font-medium text-sm">
+                        {registration.full_name || 'שחקן אנונימי'}
+                      </span>
+                    </div>
+                    <div className="flex flex-col items-end gap-1">
+                      <div className="flex flex-wrap items-center justify-end gap-2">
+                        <Badge variant="outline" className="text-xs hidden sm:inline-flex">
+                          נרשם בשעה {formatRegistrationTime(registration.created_at)}
+                        </Badge>
+                        {registration.is_waiting && (
+                          <Badge className="bg-amber-500/20 text-amber-600 border-amber-500/50 text-xs">
+                            בהמתנה לפתיחת ההרשמה לכולם
+                          </Badge>
+                        )}
+                        {registration.status === 'cancelled' ? (
+                          <Badge variant="secondary" className="text-xs">
+                            ביטל
+                          </Badge>
+                        ) : registration.status === 'finished' ? (
+                          <Badge className="bg-blue-600 text-white border-blue-600/70 text-xs">
+                            סיים
+                          </Badge>
+                        ) : (
+                          <>
+                            {registration.check_in_status === 'no_show' && (
+                              <Badge className="bg-red-600 text-white border-red-600/70 text-xs">
+                                לא הגיע
+                              </Badge>
+                            )}
+                            {registration.check_in_status === 'checked_in' && (
+                              <Badge className="bg-green-500/20 text-green-500 border-green-500/50 text-xs">
+                                <CheckCircle2 className="h-3 w-3 ml-1" />
+                                במגרש
+                              </Badge>
+                            )}
+                          </>
+                        )}
+                      </div>
+                      {(showLateBadge || showEarlyFinishBadge) && (
+                        <div className="flex flex-wrap items-center justify-end gap-2">
+                          {showLateBadge && (
+                            <Badge className="bg-red-500/20 text-red-500 border-red-500/50 text-xs">
+                              {registration.eta_minutes && registration.eta_minutes > 0
+                                ? `מאחר ${registration.eta_minutes}ד'`
+                                : 'מאחר'}
+                            </Badge>
+                          )}
+                          {showEarlyFinishBadge && (
+                            <Badge className="bg-indigo-500/20 text-indigo-500 border-indigo-500/50 text-xs">
+                              {registration.early_finish_time
+                                ? `מסיים ב-${formatTimeValue(registration.early_finish_time)}`
+                                : 'מסיים מוקדם'}
+                            </Badge>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  {isExpanded && (
+                    <div className="sm:hidden text-xs text-muted-foreground pr-2">
+                      נרשם בשעה {formatRegistrationTime(registration.created_at)}
                     </div>
                   )}
-                  <span className="font-medium text-sm">
-                    {registration.full_name || 'שחקן אנונימי'}
-                  </span>
                 </div>
-                <div className="flex items-center gap-2">
-                  <Badge variant="outline" className="text-xs">
-                    נרשם בשעה {formatRegistrationTime(registration.created_at)}
-                  </Badge>
-                  {registration.is_waiting && (
-                    <Badge className="bg-amber-500/20 text-amber-600 border-amber-500/50 text-xs">
-                      בהמתנה לפתיחת ההרשמה לכולם
-                    </Badge>
-                  )}
-                  {registration.status === 'cancelled' ? (
-                    <Badge variant="secondary" className="text-xs">
-                      ביטל
-                    </Badge>
-                  ) : registration.status === 'finished' ? (
-                    <Badge className="bg-blue-600 text-white border-blue-600/70 text-xs">
-                      סיים
-                    </Badge>
-                  ) : (
-                    <>
-                      {registration.check_in_status === 'no_show' && (
-                        <Badge className="bg-red-600 text-white border-red-600/70 text-xs">
-                          לא הגיע
-                        </Badge>
-                      )}
-                      {registration.check_in_status === 'checked_in' && (
-                        <Badge className="bg-green-500/20 text-green-500 border-green-500/50 text-xs">
-                          <CheckCircle2 className="h-3 w-3 ml-1" />
-                          במגרש
-                        </Badge>
-                      )}
-                    </>
-                  )}
-                  {(registration.eta_minutes ?? 0) > 0 && (
-                    <Badge className="bg-red-500/20 text-red-500 border-red-500/50 text-xs">
-                      מאחר {registration.eta_minutes}ד&apos;
-                    </Badge>
-                  )}
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </CardContent>
