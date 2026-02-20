@@ -14,6 +14,7 @@ type HebcalResponse = {
 type ShabbatTimes = {
   date: string;
   candleLighting: Date;
+  candleLightingIsoWithOffset: string;
   havdalah: Date;
 };
 
@@ -66,10 +67,28 @@ const roundUpToHalfHour = (date: Date): Date => {
   return result;
 };
 
+const extractLocalDateAndOffset = (isoWithOffset: string): { localDate: string; offset: string } => {
+  const match = isoWithOffset.match(
+    /^(\d{4}-\d{2}-\d{2})T\d{2}:\d{2}:\d{2}(?:\.\d+)?([+-]\d{2}:\d{2}|Z)$/,
+  );
+
+  if (!match) {
+    throw new Error(`Invalid candle lighting timestamp: ${isoWithOffset}`);
+  }
+
+  return {
+    localDate: match[1],
+    offset: match[2] === "Z" ? "+00:00" : match[2],
+  };
+};
+
+const buildWave1OpensAt = (candleLightingIsoWithOffset: string): Date => {
+  const { localDate: fridayDate, offset } = extractLocalDateAndOffset(candleLightingIsoWithOffset);
+  return new Date(`${fridayDate}T12:00:00${offset}`);
+};
+
 const calculateGameTimes = (shabbatTimes: ShabbatTimes): GameTimes => {
-  const wave1Opens = new Date(shabbatTimes.date);
-  wave1Opens.setDate(wave1Opens.getDate() - 1);
-  wave1Opens.setHours(12, 0, 0, 0);
+  const wave1Opens = buildWave1OpensAt(shabbatTimes.candleLightingIsoWithOffset);
 
   const wave2Opens = new Date(shabbatTimes.candleLighting);
   wave2Opens.setMinutes(wave2Opens.getMinutes() - 60);
@@ -103,11 +122,13 @@ const getNextShabbatTimes = async (): Promise<ShabbatTimes> => {
   const data = (await response.json()) as HebcalResponse;
 
   let candleLighting: Date | null = null;
+  let candleLightingIsoWithOffset: string | null = null;
   let havdalah: Date | null = null;
   let shabbatDate: string | null = null;
 
   for (const item of data.items) {
     if (item.category === "candles") {
+      candleLightingIsoWithOffset = item.date;
       candleLighting = new Date(item.date);
       const saturday = new Date(candleLighting);
       saturday.setDate(saturday.getDate() + 1);
@@ -117,13 +138,14 @@ const getNextShabbatTimes = async (): Promise<ShabbatTimes> => {
     }
   }
 
-  if (!candleLighting || !havdalah || !shabbatDate) {
+  if (!candleLighting || !candleLightingIsoWithOffset || !havdalah || !shabbatDate) {
     throw new Error("Could not find Shabbat times in Hebcal response");
   }
 
   return {
     date: shabbatDate,
     candleLighting,
+    candleLightingIsoWithOffset,
     havdalah,
   };
 };

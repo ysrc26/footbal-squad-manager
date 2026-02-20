@@ -246,11 +246,8 @@ export function GameRegistration() {
   const canRegister = () => {
     if (!currentGame) return false;
 
-    // Wave 2: Open for all - check timestamp first
-    if (isWave2Open) return true;
-
-    // Wave 1: Allow everyone to register, non-residents enter as waiting
-    if (isWave1Open) return true;
+    // Registration is open from wave 1 onward
+    if (isWave1Open || isWave2Open) return true;
     
     // Fallback to status field for backward compatibility
     if (currentGame.status === 'open_for_residents') {
@@ -263,24 +260,14 @@ export function GameRegistration() {
   const getRegistrationStatusText = () => {
     if (!currentGame) return 'ההרשמה סגורה';
 
-    // Wave 2: Open for all
     if (isWave2Open) {
       return 'הירשם למשחק';
     }
 
-    // Wave 1: Residents + waiting list for non-residents
     if (isWave1Open) {
-      return profile?.is_resident ? 'הירשם למשחק' : 'הירשם (בהמתנה)';
+      return profile?.is_resident ? 'הירשם למשחק' : 'הירשם למשחק (בהמתנה)';
     }
-    
-    // Fallback to status field
-    if (currentGame.status === 'open_for_all') {
-      return 'הירשם למשחק';
-    }
-    if (currentGame.status === 'open_for_residents') {
-      return profile?.is_resident ? 'הירשם למשחק' : 'ההרשמה פתוחה לתושבים בלבד';
-    }
-    
+
     return 'ההרשמה סגורה';
   };
 
@@ -513,15 +500,15 @@ export function GameRegistration() {
   const getStatusBadge = () => {
     if (!currentGame) return null;
 
-    const statusMap: Record<string, { label: string; variant: 'default' | 'secondary' | 'destructive' | 'outline' }> = {
-      scheduled: { label: 'מתוכנן', variant: 'secondary' },
-      open_for_residents: { label: 'פתוח להרשמה לתושבים🏠', variant: 'default' },
-      open_for_all: { label: 'פתוח להרשמה לכולם', variant: 'default' },
-      closed: { label: 'סגור להרשמה', variant: 'destructive' },
-    };
+    if (currentGame.status === 'cancelled') {
+      return <Badge variant="destructive">בוטל</Badge>;
+    }
 
-    const status = statusMap[currentGame.status] || { label: currentGame.status, variant: 'outline' as const };
-    return <Badge variant={status.variant}>{status.label}</Badge>;
+    if (isWave2Open || isWave1Open) {
+      return <Badge variant="default">פתוח להרשמה</Badge>;
+    }
+
+    return <Badge variant="secondary">מתוכנן</Badge>;
   };
 
   const formatDate = (dateStr: string) => {
